@@ -3,8 +3,12 @@ services:
     build: .
     command: uvicorn main:app --host 0.0.0.0 --port 8001 --reload
     environment:
-      APP_NAME: ${APP_NAME:-Postas AI API}
+      APP_NAME: ${APP_NAME:-Postas Platform API}
       API_PREFIX: ${API_PREFIX:-/api/v1}
+      DATABASE_URL: ${DATABASE_URL:-sqlite:////app/postas_platform.db}
+      POSTAS_SERVICE_TOKEN: ${POSTAS_SERVICE_TOKEN:-}
+      POSTAS_SERVICE_TOKEN_HEADER: ${POSTAS_SERVICE_TOKEN_HEADER:-X-Postas-Service-Token}
+      POSTAS_SERVICE_SOURCE_HEADER: ${POSTAS_SERVICE_SOURCE_HEADER:-X-Postas-Source}
       POSTAS_AI_API_TOKEN: ${POSTAS_AI_API_TOKEN:-}
       REQUIRE_API_TOKEN: ${REQUIRE_API_TOKEN:-false}
       POSTAS_AI_TOKEN_HEADER: ${POSTAS_AI_TOKEN_HEADER:-X-Postas-AI-Token}

@@ -53,6 +53,10 @@ def _csv_env(name: str) -> tuple[str, ...]:
 class Settings:
     app_name: str
     api_prefix: str
+    database_url: str
+    postas_service_token: str | None
+    service_token_header_name: str
+    service_source_header_name: str
     ai_provider: str
     fallback_ai_provider: str | None
     max_ai_attempts: int
@@ -78,10 +82,16 @@ def get_settings() -> Settings:
     fallback_provider = fallback_provider.strip() if fallback_provider else None
     api_token = os.getenv("POSTAS_AI_API_TOKEN") or os.getenv("API_SHARED_TOKEN")
     api_token = api_token.strip() if api_token else None
+    service_token = os.getenv("POSTAS_SERVICE_TOKEN")
+    service_token = service_token.strip() if service_token else None
 
     return Settings(
-        app_name=os.getenv("APP_NAME", "Postas AI API"),
+        app_name=os.getenv("APP_NAME", "Postas Platform API"),
         api_prefix=os.getenv("API_PREFIX", "/api/v1"),
+        database_url=os.getenv("DATABASE_URL", "sqlite:///./postas_platform.db"),
+        postas_service_token=service_token,
+        service_token_header_name=os.getenv("POSTAS_SERVICE_TOKEN_HEADER", "X-Postas-Service-Token"),
+        service_source_header_name=os.getenv("POSTAS_SERVICE_SOURCE_HEADER", "X-Postas-Source"),
         ai_provider=os.getenv("AI_PROVIDER", "google_genai").strip(),
         fallback_ai_provider=fallback_provider or None,
         max_ai_attempts=max(1, _int_env("MAX_AI_ATTEMPTS", 1)),

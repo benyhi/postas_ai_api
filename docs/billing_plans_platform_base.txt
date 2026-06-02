@@ -1,0 +1,72 @@
+Feature:
+Billing & Plans platform base
+
+Classification:
+large
+
+Context reviewed:
+- app/main.py
+- app/api/routes.py
+- app/core/config.py
+- app/core/security.py
+- requirements.txt
+- README.md
+- docs/document-extraction-flow.md
+
+Current behavior:
+El servicio funcionaba como API stateless de IA, sin base de datos, SQLAlchemy,
+Alembic, suscripciones, planes ni consumos persistidos.
+
+Proposed behavior:
+El servicio pasa a ser la base de postas_platform_api y expone endpoints
+internos para consultar permisos y registrar consumos de tenants.
+
+Implementation plan:
+1. Agregar configuracion de plataforma, base de datos sync y Alembic.
+2. Crear modelos SQLAlchemy para planes, features, suscripciones, pagos y usage.
+3. Implementar seed idempotente del catalogo inicial.
+4. Agregar servicios y endpoints internos bajo /internal/v1.
+5. Cubrir seed, permisos, consumo, idempotencia y seguridad con tests.
+6. Documentar migraciones, seed, seguridad y ejemplos curl.
+
+Files changed:
+- app/core/config.py
+- app/main.py
+- app/db/
+- app/billing/
+- alembic.ini
+- alembic/versions/20260528_0001_billing_base.py
+- scripts/seed_billing.py
+- tests/test_billing.py
+- docs/billing.md
+- README.md
+- .env.example
+- docker-compose.yml
+- requirements.txt
+- main.py
+
+Tests created or updated:
+- tests/test_billing.py
+
+Documentation updated:
+- docs/billing.md
+- README.md
+
+Checks run:
+- python -m compileall app main.py scripts tests: passed
+- python -m pytest tests/test_billing.py -q: passed
+- python -m pytest -q: passed
+- python -m alembic upgrade head --sql: passed
+- python -m alembic upgrade head with temp SQLite DB: passed
+- python scripts/seed_billing.py with temp SQLite DB: passed
+- python -m alembic downgrade base with temp SQLite DB: passed
+- git diff --check: passed
+
+Risks:
+- El proyecto no tenia DB previa, por lo que esta etapa introduce una convencion
+  nueva para SQLAlchemy/Alembic.
+
+Important notes:
+- Los endpoints legacy de IA se mantienen durante la transicion.
+- No se implementaron endpoints admin porque aun no hay autenticacion admin en
+  este servicio.
