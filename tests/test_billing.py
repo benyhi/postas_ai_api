@@ -63,7 +63,13 @@ def auth_headers(source: str = "postas_api") -> dict[str, str]:
     }
 
 
-def create_subscription(db: Session, tenant_id: UUID, plan_code: str, status: str = "active") -> TenantSubscription:
+def create_subscription(
+    db: Session,
+    tenant_id: UUID,
+    plan_code: str,
+    status: str = "active",
+    current_period_end: datetime | None = None,
+) -> TenantSubscription:
     plan = db.scalar(select(Plan).where(Plan.code == plan_code))
     assert plan is not None
     now = datetime.now(timezone.utc)
@@ -72,7 +78,7 @@ def create_subscription(db: Session, tenant_id: UUID, plan_code: str, status: st
         plan_id=plan.id,
         status=status,
         current_period_start=now - timedelta(days=1),
-        current_period_end=now + timedelta(days=30),
+        current_period_end=current_period_end or now + timedelta(days=30),
     )
     db.add(subscription)
     db.commit()
@@ -104,6 +110,54 @@ def test_business_ai_can_use_document_extraction_when_quota_available(db_session
     assert response.remaining == 100
 
 
+def test_expired_subscription_denies_with_specific_reason(db_session: Session) -> None:
+    tenant_id = uuid4()
+    create_subscription(
+        db_session,
+        tenant_id,
+        "business_ai",
+        current_period_end=datetime.now(timezone.utc) - timedelta(seconds=1),
+    )
+
+    response = BillingService(db_session).check_entitlement(
+        EntitlementCheckRequest(tenant_id=tenant_id, feature_key="document_extraction", amount=1)
+    )
+
+    assert response.allowed is False
+    assert response.reason == "subscription_expired"
+    assert response.subscription_status == "active"
+    assert response.upgrade_required is True
+
+
+@pytest.mark.parametrize(
+    ("subscription_status", "expected_reason"),
+    [
+        ("cancelled", "subscription_cancelled"),
+        ("canceled", "subscription_cancelled"),
+        ("past_due", "subscription_payment_required"),
+        ("unpaid", "subscription_payment_required"),
+        ("payment_failed", "subscription_payment_required"),
+        ("paused", "subscription_inactive"),
+    ],
+)
+def test_inactive_subscription_statuses_return_specific_reasons(
+    db_session: Session,
+    subscription_status: str,
+    expected_reason: str,
+) -> None:
+    tenant_id = uuid4()
+    create_subscription(db_session, tenant_id, "business_ai", status=subscription_status)
+
+    response = BillingService(db_session).check_entitlement(
+        EntitlementCheckRequest(tenant_id=tenant_id, feature_key="document_extraction", amount=1)
+    )
+
+    assert response.allowed is False
+    assert response.reason == expected_reason
+    assert response.subscription_status == subscription_status
+    assert response.upgrade_required is True
+
+
 def test_tenant_status_endpoint_returns_subscription_and_feature_usage(client: TestClient, db_session: Session) -> None:
     tenant_id = uuid4()
     create_subscription(db_session, tenant_id, "business_ai")
@@ -117,6 +171,24 @@ def test_tenant_status_endpoint_returns_subscription_and_feature_usage(client: T
     assert payload["features"]["document_extraction"]["enabled"] is True
     assert payload["features"]["document_extraction"]["limit"] == 100
     assert payload["features"]["document_extraction"]["used"] == 0
+
+
+def test_tenant_status_endpoint_reflects_expired_subscription(client: TestClient, db_session: Session) -> None:
+    tenant_id = uuid4()
+    create_subscription(
+        db_session,
+        tenant_id,
+        "business_ai",
+        current_period_end=datetime.now(timezone.utc) - timedelta(seconds=1),
+    )
+
+    response = client.get(f"/internal/v1/tenants/{tenant_id}/status", headers=auth_headers("postas_api"))
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["status"] == "subscription_expired"
+    assert payload["subscription"]["status"] == "subscription_expired"
+    assert payload["features"]["document_extraction"]["enabled"] is False
 
 
 def test_business_ai_cannot_use_document_extraction_when_quota_is_exhausted(db_session: Session) -> None:

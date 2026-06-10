@@ -22,6 +22,8 @@ from app.billing.schemas import (
 
 
 ACTIVE_SUBSCRIPTION_STATUSES = {"trialing", "active"}
+CANCELLED_SUBSCRIPTION_STATUSES = {"cancelled", "canceled"}
+PAYMENT_REQUIRED_SUBSCRIPTION_STATUSES = {"past_due", "unpaid", "payment_failed"}
 
 
 class BillingService:
@@ -33,6 +35,8 @@ class BillingService:
         if subscription is None:
             return None
 
+        effective_status = effective_subscription_status(subscription)
+        entitlements_active = effective_status in ACTIVE_SUBSCRIPTION_STATUSES
         period_key = current_period_key()
         features: dict[str, TenantFeatureStatus] = {}
         for plan_feature in subscription.plan.features:
@@ -45,7 +49,7 @@ class BillingService:
                 remaining = calculate_remaining(plan_feature.limit_value, used)
 
             features[feature.key] = TenantFeatureStatus(
-                enabled=plan_feature.enabled,
+                enabled=plan_feature.enabled and entitlements_active,
                 limit=plan_feature.limit_value,
                 used=used,
                 remaining=remaining,
@@ -54,11 +58,11 @@ class BillingService:
 
         return TenantStatusResponse(
             tenant_id=tenant_id,
-            status=subscription.status,
+            status=effective_status,
             subscription=TenantSubscriptionStatus(
                 plan=subscription.plan.code,
                 plan_name=subscription.plan.name,
-                status=subscription.status,
+                status=effective_status,
                 current_period_start=subscription.current_period_start,
                 current_period_end=subscription.current_period_end,
             ),
@@ -76,14 +80,17 @@ class BillingService:
                 reason="subscription_not_found",
                 message="El tenant no tiene una suscripcion registrada.",
                 subscription_status=None,
+                upgrade_required=True,
             )
 
-        if subscription.status not in ACTIVE_SUBSCRIPTION_STATUSES:
+        denial_reason = subscription_denial_reason(subscription)
+        if denial_reason is not None:
             return self._denied(
                 request.feature_key,
-                reason="subscription_inactive",
-                message="La suscripcion del tenant no esta activa.",
+                reason=denial_reason,
+                message=subscription_denial_message(denial_reason),
                 subscription_status=subscription.status,
+                upgrade_required=True,
             )
 
         feature = self.get_feature(request.feature_key)
@@ -442,3 +449,30 @@ def calculate_remaining(limit_value: int | None, used: int | None) -> int | None
     if limit_value is None or used is None:
         return None
     return max(limit_value - used, 0)
+
+
+def effective_subscription_status(subscription: TenantSubscription) -> str:
+    return subscription_denial_reason(subscription) or subscription.status
+
+
+def subscription_denial_reason(subscription: TenantSubscription) -> str | None:
+    status = subscription.status.lower()
+    if ensure_utc(subscription.current_period_end) < utc_now():
+        return "subscription_expired"
+    if status in CANCELLED_SUBSCRIPTION_STATUSES:
+        return "subscription_cancelled"
+    if status in PAYMENT_REQUIRED_SUBSCRIPTION_STATUSES:
+        return "subscription_payment_required"
+    if status not in ACTIVE_SUBSCRIPTION_STATUSES:
+        return "subscription_inactive"
+    return None
+
+
+def subscription_denial_message(reason: str) -> str:
+    messages = {
+        "subscription_expired": "La suscripcion del tenant esta vencida.",
+        "subscription_cancelled": "La suscripcion del tenant fue cancelada.",
+        "subscription_payment_required": "La suscripcion del tenant requiere regularizar el pago.",
+        "subscription_inactive": "La suscripcion del tenant no esta activa.",
+    }
+    return messages.get(reason, "La suscripcion del tenant no esta activa.")
