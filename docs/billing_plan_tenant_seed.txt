@@ -1,0 +1,32 @@
+Feature:
+billing plan tenant seed
+
+Summary:
+Added the private test plan to the billing catalog and added a script that creates one local active subscription per active plan with consecutive tenant UUIDs.
+
+Files changed:
+- app/billing/seed.py
+- scripts/seed_plan_tenants.py
+- tests/test_billing.py
+- README.md
+- docs/billing.md
+- docs/billing_plan_tenant_seed.txt
+
+Tests created or updated:
+- tests/test_billing.py
+
+Documentation updated:
+- README.md
+- docs/billing.md
+- docs/billing_plan_tenant_seed.txt
+
+Checks run:
+- .\env\Scripts\python.exe -m pytest tests\test_billing.py -q: passed
+- temporary SQLite alembic upgrade plus scripts\seed_plan_tenants.py twice: passed
+- .\env\Scripts\python.exe -m compileall app main.py scripts tests: passed
+- git diff --check: passed
+- .\env\Scripts\python.exe -m ruff check .: not available
+
+Important notes:
+- The script reuses an existing active subscription for a plan before creating a new tenant.
+- The local default database was seeded with tenants 00000000-0000-0000-0000-000000000001 through 00000000-0000-0000-0000-000000000006.

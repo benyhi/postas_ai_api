@@ -119,6 +119,27 @@ PLAN_CATALOG: list[dict[str, Any]] = [
         "is_public": False,
         "features": {},
     },
+    {
+        "code": "test",
+        "name": "Test",
+        "price_amount": Decimal("0.00"),
+        "is_public": False,
+        "features": {
+            "pos_sales": (True, 1, "monthly"),
+            "sales_history": (True, None, None),
+            "products": (True, 1, None),
+            "cashboxes": (True, 1, None),
+            "suppliers": (True, 1, None),
+            "users": (True, 1, None),
+            "basic_reports": (True, None, None),
+            "document_extraction": (True, 1, "monthly"),
+            "advanced_reports": (True, None, None),
+            "import_products": (True, None, None),
+            "export_products": (True, None, None),
+            "priority_support": (True, None, None),
+            "cashbox_email_report": (True, 1, "monthly"),
+        },
+    },
 ]
 
 

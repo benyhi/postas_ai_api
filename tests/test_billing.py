@@ -9,7 +9,7 @@ from sqlalchemy import create_engine, func, select
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from app.billing.models import Plan, TenantSubscription, UsageCounter, UsageEvent
+from app.billing.models import Feature, Payment, Plan, TenantSubscription, UsageCounter, UsageEvent
 from app.billing.schemas import EntitlementCheckRequest
 from app.billing.seed import seed_billing_catalog
 from app.billing.service import BillingService
@@ -17,6 +17,7 @@ from app.core.config import get_settings
 from app.db.base import Base
 from app.db.session import get_db
 from app.main import app
+from scripts.seed_plan_tenants import seed_plan_tenants
 
 
 @pytest.fixture()
@@ -91,8 +92,63 @@ def test_seed_creates_plans_and_features_without_duplicates(db_session: Session)
     seed_billing_catalog(db_session)
     second_plan_count = db_session.scalar(select(func.count()).select_from(Plan))
 
-    assert first_plan_count == 5
+    assert first_plan_count == 6
     assert second_plan_count == first_plan_count
+
+
+def test_seed_creates_test_plan_with_one_unit_limits(db_session: Session) -> None:
+    plan = db_session.scalar(select(Plan).where(Plan.code == "test"))
+    assert plan is not None
+    assert plan.name == "Test"
+    assert plan.is_public is False
+
+    features = db_session.scalars(select(Feature)).all()
+    plan_features = {plan_feature.feature.key: plan_feature for plan_feature in plan.features}
+
+    assert set(plan_features) == {feature.key for feature in features}
+    for feature in features:
+        plan_feature = plan_features[feature.key]
+        assert plan_feature.enabled is True
+        if feature.type in {"monthly_usage", "resource_limit"}:
+            assert plan_feature.limit_value == 1
+        else:
+            assert plan_feature.limit_value is None
+        if feature.type == "monthly_usage":
+            assert plan_feature.reset_period == "monthly"
+
+
+def test_seed_plan_tenants_creates_missing_consecutive_tenants_and_is_idempotent(db_session: Session) -> None:
+    existing_tenant = UUID(int=1)
+    create_subscription(db_session, existing_tenant, "starter")
+
+    first_result = seed_plan_tenants(db_session)
+
+    subscriptions = db_session.scalars(
+        select(TenantSubscription)
+        .join(Plan)
+        .where(TenantSubscription.status == "active")
+        .order_by(TenantSubscription.tenant_id)
+    ).all()
+    tenant_by_plan = {subscription.plan.code: UUID(subscription.tenant_id).int for subscription in subscriptions}
+
+    assert tenant_by_plan == {
+        "starter": 1,
+        "free": 2,
+        "business": 3,
+        "business_ai": 4,
+        "custom": 5,
+        "test": 6,
+    }
+    assert first_result.created_subscriptions == 5
+    assert first_result.created_payments == 6
+    assert db_session.scalar(select(func.count()).select_from(Payment)) == 6
+
+    second_result = seed_plan_tenants(db_session)
+
+    assert second_result.created_subscriptions == 0
+    assert second_result.created_payments == 0
+    assert db_session.scalar(select(func.count()).select_from(TenantSubscription)) == 6
+    assert db_session.scalar(select(func.count()).select_from(Payment)) == 6
 
 
 def test_business_ai_can_use_document_extraction_when_quota_available(db_session: Session) -> None:

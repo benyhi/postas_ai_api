@@ -29,6 +29,28 @@ python scripts/seed_billing.py
 El seed actualiza planes, features y configuraciones `PlanFeature` existentes
 sin duplicar registros.
 
+El catalogo incluye un plan privado `test`. Ese plan habilita todas las
+features y configura limite `1` para las features de tipo `monthly_usage` y
+`resource_limit`, para probar permisos y limites rapidamente.
+
+## Tenants locales por plan
+
+Para generar datos locales de prueba, uno por cada plan activo:
+
+```bash
+python scripts/seed_plan_tenants.py
+```
+
+El script primero sincroniza el catalogo de billing. Luego reutiliza la primera
+suscripcion activa existente por plan y crea suscripciones `active` para los
+planes faltantes. Los nuevos tenants usan UUIDs consecutivos al mayor tenant ya
+presente en billing. Tambien crea un pago manual aprobado cuando la
+suscripcion no tiene pago asociado.
+
+En esta API no hay una tabla `tenant`; para billing, un tenant de prueba queda
+representado por su `tenant_id` en `billing_tenant_subscriptions` y
+`billing_payments`.
+
 ## Seguridad interna
 
 Los endpoints internos viven bajo `/internal/v1`.

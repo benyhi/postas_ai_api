@@ -66,6 +66,19 @@ El catalogo inicial de planes y features es idempotente:
 .\env\Scripts\python.exe scripts\seed_billing.py
 ```
 
+El plan `test` queda incluido en ese seed. Es privado y habilita todas las
+features; las features de consumo mensual o limite de recursos quedan con
+limite `1`.
+
+Para crear tenants locales de prueba, uno por cada plan activo, ejecutar:
+
+```bash
+.\env\Scripts\python.exe scripts\seed_plan_tenants.py
+```
+
+El script reutiliza cualquier suscripcion activa existente para un plan y crea
+los planes faltantes con UUIDs consecutivos al mayor tenant ya presente.
+
 Documentacion del modulo:
 
 - [docs/billing.md](docs/billing.md)
