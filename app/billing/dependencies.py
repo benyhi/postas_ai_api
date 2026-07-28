@@ -19,16 +19,28 @@ def verify_internal_request(request: Request) -> InternalRequestContext:
     settings = get_settings()
     source = _extract_source(request, settings)
 
-    if settings.allowed_request_sources and source not in settings.allowed_request_sources:
+    if not settings.postas_service_token:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="La autenticacion interna no esta configurada",
+        )
+    if not settings.allowed_request_sources:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Los origenes internos permitidos no estan configurados",
+        )
+    if source not in settings.allowed_request_sources:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Origen de request no permitido")
 
-    expected_token = settings.postas_service_token
-    if expected_token:
-        received_token = request.headers.get(settings.service_token_header_name)
-        if not received_token or not secrets.compare_digest(received_token.strip(), expected_token):
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Token de servicio invalido")
+    if settings.internal_require_tls and request.url.scheme != "https":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="TLS es obligatorio")
 
-    return InternalRequestContext(source=source, authenticated=bool(expected_token))
+    expected_token = settings.postas_service_token
+    received_token = request.headers.get(settings.service_token_header_name)
+    if not received_token or not secrets.compare_digest(received_token.strip(), expected_token):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Token de servicio invalido")
+
+    return InternalRequestContext(source=source, authenticated=True)
 
 
 def get_billing_service(db: Session = Depends(get_db)) -> BillingService:

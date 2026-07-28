@@ -1,0 +1,132 @@
+Feature:
+Servicio ARCA multi-tenant con facturacion automatica
+
+Classification:
+large
+
+Context reviewed:
+- app/core, app/db, app/billing y API interna de postas_platform_api
+- apps/tenants, apps/sales y apps/platform_billing de postas_api
+- arca_invoice_service/ no versionado, usado solo como referencia
+- Documentacion oficial de ARCA y Afip SDK para WSAA, produccion y comprobantes
+
+Current behavior:
+postas_platform_api administra perfiles fiscales cifrados por tenant y ambiente, valida credenciales contra homologacion o produccion y mantiene facturas idempotentes con recuperacion de resultados inciertos. postas_api confirma ventas junto con una outbox durable y entrega solicitudes automaticas sin bloquear ni revertir la venta.
+
+Proposed behavior:
+Implementado. Platform es la fuente de verdad fiscal y postas_api expone la API autenticada, deriva tenant y actor del JWT y conserva el ambiente dentro del snapshot de cada solicitud.
+
+Implementation plan:
+1. Agregar keyring Fernet obligatorio, perfiles fiscales y validacion de certificado, clave y CUIT.
+2. Portar facturas, items, correlatividad, idempotencia, timeout y worker al Base/Alembic principal.
+3. Agregar endpoints internos ARCA protegidos por token, source y TLS, con entitlement obligatorio.
+4. Ampliar TenantConfig y crear una outbox transaccional en postas_api.
+5. Agregar cliente/proxy publico ARCA y workers independientes en ambos servicios.
+6. Probar cifrado, tenant isolation, ambientes, permisos, outbox, calculos fiscales y recuperacion.
+
+Files changed:
+- app/arca/
+- app/core/config.py
+- app/billing/dependencies.py
+- app/billing/seed.py
+- app/main.py
+- alembic/env.py
+- alembic/versions/20260727_01_arca_multi_tenant.py
+- tests/test_arca.py
+- tests/test_billing.py
+- requirements.txt
+- docker-compose.yml
+- .gitignore
+- .env.example
+- README.md
+- docs/arca_invoicing_service.txt
+
+Tests created or updated:
+- tests/test_arca.py
+- tests/test_billing.py
+
+Documentation updated:
+- README.md
+- .env.example
+- docs/arca_invoicing_service.txt
+
+Checks run:
+- Context review: passed
+- python -m pytest tests -q: passed (50 tests, 2 opt-in skipped)
+- python -m pytest tests/test_arca_live.py -q: skipped por defecto; solo homologacion opt-in
+- python -m pytest tests/test_arca_postgres.py -q: opt-in mediante ARCA_POSTGRES_TEST_DATABASE_URL
+- python -m py_compile ARCA modules: passed
+- afip.py 1.2.0 import y construccion del wrapper development: passed
+- docker compose config --quiet: passed
+
+Risks:
+- Exposicion de cert, key o access_token.
+- Emision en produccion desde una instancia no habilitada.
+- Duplicacion de comprobantes tras timeouts o concurrencia.
+- Perdida de solicitudes automaticas o acceso cruzado entre tenants.
+
+Important notes:
+- arca_invoice_service/ permanece no versionado y no sera agregado, eliminado ni modificado.
+- Los precios de ventas se interpretan como finales con IVA incluido.
+- Los comprobantes pendientes conservan el ambiente del snapshot aunque cambie TenantConfig.
+
+Variables obligatorias y guards:
+- POSTAS_SERVICE_TOKEN: sin valor, la API interna falla cerrada.
+- ALLOWED_REQUEST_SOURCES: debe incluir postas_api; sin lista, falla cerrada.
+- POSTAS_INTERNAL_REQUIRE_TLS=true: exige que ASGI vea el request como HTTPS; detras de un proxy se deben habilitar proxy headers solo para IPs confiables.
+- ARCA_CREDENTIAL_MASTER_KEYS: objeto JSON con key_id como clave y una Fernet key como valor.
+- ARCA_CREDENTIAL_ACTIVE_KEY_ID: key_id usado para nuevas escrituras y rotaciones.
+- ARCA_PRODUCTION_CALLS_ENABLED=false: bloquea toda llamada productiva aunque exista un perfil production valido.
+- ARCA_TIMEOUT_SECONDS=30.
+- ARCA_WORKER_POLL_SECONDS=5.
+- ARCA_WORKER_BATCH_SIZE=20.
+- ARCA_CONSUMER_FINAL_IDENTIFICATION_THRESHOLD=10000000.
+
+Alta y validacion:
+1. Generar una Fernet key fuera del repositorio y cargarla en el keyring externo.
+2. Enviar cert, private_key, access_token, CUIT, punto de venta y configuracion fiscal al PUT interno del perfil.
+3. El alta valida PEM, vigencia, clave correspondiente y CUIT obligatorio en el subject del certificado.
+4. Ejecutar POST /profiles/{environment}/validate para comprobar access_token, WSAA/WSFE, autorizacion y conectividad.
+5. El endpoint nunca devuelve cert, private_key ni access_token.
+
+Rotacion:
+1. Agregar la nueva Fernet key al JSON conservando las anteriores.
+2. Cambiar ARCA_CREDENTIAL_ACTIVE_KEY_ID.
+3. Reiniciar la instancia y ejecutar POST /profiles/rotate-keyring para cada tenant.
+4. Verificar credential_key_id y credentials_rotated_at en la respuesta del perfil.
+5. Retirar una clave anterior del keyring solo cuando ningun perfil la referencia.
+
+Workers y recuperacion:
+- Platform: python -m app.arca.worker.
+- postas_api: python manage.py run_arca_outbox_worker.
+- Ambos comandos fallan cerrados si la conexion no es PostgreSQL.
+- Docker Compose inicia arca_worker y arca_outbox_worker como servicios separados.
+- El Compose nativo de Platform usa PostgreSQL y ambos procesos esperan su healthcheck; PLATFORM_DATABASE_URL permite reemplazar la conexion.
+- La outbox usa el UUID de venta como external_id estable.
+- La factura persiste la reserva correlativa antes de llamar a ARCA y consulta la ultima correlativa bajo lock por ambiente, CUIT, punto de venta y tipo.
+- PostgreSQL usa FOR UPDATE SKIP LOCKED y pg_advisory_xact_lock.
+- Tras timeout o muerte del proceso se consulta getVoucherInfo para el mismo numero; solo un not_found confirmado permite reemitir.
+- Los intentos se programan en 0, 1, 10, 30 y 60 minutos; los errores inesperados quedan en quarantined.
+
+Pruebas live de homologacion:
+- Configurar ARCA_LIVE_TESTS=1, ARCA_LIVE_ENVIRONMENT=development y las variables ARCA_LIVE_CUIT, ARCA_LIVE_CERTIFICATE, ARCA_LIVE_PRIVATE_KEY, ARCA_LIVE_ACCESS_TOKEN y ARCA_LIVE_POINT_OF_SALE.
+- Ejecutar python -m pytest tests/test_arca_live.py -q.
+- La prueba falla si se intenta usar production y solo consulta la ultima correlativa; no emite comprobantes.
+
+Concurrencia PostgreSQL:
+- Configurar ARCA_POSTGRES_TEST_DATABASE_URL con una base PostgreSQL accesible y ejecutar python -m pytest tests/test_arca_postgres.py -q.
+- La prueba crea y elimina un schema aislado, fuerza dos emisiones contendiendo por la misma correlativa y comprueba que se asignen 11 y 12 sin duplicados.
+
+Recuperacion operativa:
+- pending/retrying: mantener ambos workers activos; no crear una nueva solicitud con otro external_id.
+- receiver_identification_required: conservar la venta y completar la misma solicitud mediante el endpoint explicito, con documento y numero de comprobante; no crear otro external_id.
+- fiscal_profile_has_pending_invoices/fiscal_profile_in_use: procesar o resolver solicitudes no terminales antes de reemplazar o eliminar el perfil.
+- failed: corregir credenciales/conectividad y revisar last_error_code antes de reencolar.
+- quarantined: revisar logs y request_payload; resolver el error interno antes de cambiar el estado.
+- production: comprobar environment, arca_cuit, point_of_sale y voucher_type antes de cualquier intervencion manual.
+
+Fuentes:
+- https://www.arca.gob.ar/ws/documentacion/
+- https://docs.afipsdk.com/siguientes-pasos/ir-a-produccion
+- https://www.arca.gob.ar/fe/emision-autorizacion/datos-comprobantes.asp
+- https://www.arca.gob.ar/facturacion/regimen-general/comprobantes.asp

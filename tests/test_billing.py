@@ -54,7 +54,7 @@ def db_session(monkeypatch: pytest.MonkeyPatch):
 
 @pytest.fixture()
 def client(db_session: Session) -> TestClient:
-    return TestClient(app)
+    return TestClient(app, base_url="https://testserver")
 
 
 def auth_headers(source: str = "postas_api") -> dict[str, str]:
@@ -421,3 +421,29 @@ def test_internal_security_rejects_requests_without_valid_token(client: TestClie
     )
 
     assert response.status_code == 403
+
+
+def test_internal_security_requires_tls(db_session: Session) -> None:
+    insecure_client = TestClient(app, base_url="http://testserver")
+    response = insecure_client.get(
+        f"/internal/v1/tenants/{uuid4()}/status",
+        headers=auth_headers("postas_api"),
+    )
+
+    assert response.status_code == 403
+    assert response.json()["detail"] == "TLS es obligatorio"
+
+
+def test_internal_security_fails_closed_without_service_token(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("POSTAS_SERVICE_TOKEN", "")
+    get_settings.cache_clear()
+    response = client.get(
+        f"/internal/v1/tenants/{uuid4()}/status",
+        headers={"X-Postas-Source": "postas_api"},
+    )
+
+    assert response.status_code == 503
+    assert response.json()["detail"] == "La autenticacion interna no esta configurada"

@@ -5,4 +5,7 @@ langchain-core>=0.3
 langchain-google-genai>=2.1
 SQLAlchemy>=2.0
 alembic>=1.13
+afip.py==1.2.0
+cryptography>=45.0
+psycopg[binary]>=3.2
 pytest>=8.0

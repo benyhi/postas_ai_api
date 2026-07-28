@@ -73,6 +73,14 @@ class Settings:
     allowed_request_sources: tuple[str, ...]
     image_download_timeout_seconds: float
     max_image_bytes: int
+    internal_require_tls: bool
+    arca_credential_master_keys: str | None
+    arca_credential_active_key_id: str | None
+    arca_production_calls_enabled: bool
+    arca_timeout_seconds: float
+    arca_worker_poll_seconds: float
+    arca_worker_batch_size: int
+    arca_consumer_final_identification_threshold: float
 
 
 @lru_cache(maxsize=1)
@@ -84,6 +92,10 @@ def get_settings() -> Settings:
     api_token = api_token.strip() if api_token else None
     service_token = os.getenv("POSTAS_SERVICE_TOKEN")
     service_token = service_token.strip() if service_token else None
+    master_keys = os.getenv("ARCA_CREDENTIAL_MASTER_KEYS")
+    master_keys = master_keys.strip() if master_keys else None
+    active_key_id = os.getenv("ARCA_CREDENTIAL_ACTIVE_KEY_ID")
+    active_key_id = active_key_id.strip() if active_key_id else None
 
     return Settings(
         app_name=os.getenv("APP_NAME", "Postas Platform API"),
@@ -108,4 +120,14 @@ def get_settings() -> Settings:
         allowed_request_sources=_csv_env("ALLOWED_REQUEST_SOURCES"),
         image_download_timeout_seconds=_float_env("IMAGE_DOWNLOAD_TIMEOUT_SECONDS", 15.0),
         max_image_bytes=max(1, _int_env("MAX_IMAGE_BYTES", 10 * 1024 * 1024)),
+        internal_require_tls=_bool_env("POSTAS_INTERNAL_REQUIRE_TLS", True),
+        arca_credential_master_keys=master_keys,
+        arca_credential_active_key_id=active_key_id,
+        arca_production_calls_enabled=_bool_env("ARCA_PRODUCTION_CALLS_ENABLED", False),
+        arca_timeout_seconds=_float_env("ARCA_TIMEOUT_SECONDS", 30.0),
+        arca_worker_poll_seconds=_float_env("ARCA_WORKER_POLL_SECONDS", 5.0),
+        arca_worker_batch_size=max(1, _int_env("ARCA_WORKER_BATCH_SIZE", 20)),
+        arca_consumer_final_identification_threshold=_float_env(
+            "ARCA_CONSUMER_FINAL_IDENTIFICATION_THRESHOLD", 10_000_000.0
+        ),
     )

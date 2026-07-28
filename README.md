@@ -35,6 +35,13 @@ Variables principales:
 - `DATABASE_URL`
 - `POSTAS_SERVICE_TOKEN`
 - `ALLOWED_REQUEST_SOURCES`
+- `POSTAS_INTERNAL_REQUIRE_TLS` (por defecto `true`)
+- `ARCA_CREDENTIAL_MASTER_KEYS` (objeto JSON `key_id -> Fernet key`, sin fallback)
+- `ARCA_CREDENTIAL_ACTIVE_KEY_ID`
+- `ARCA_PRODUCTION_CALLS_ENABLED` (por defecto `false`)
+- `ARCA_TIMEOUT_SECONDS`
+- `ARCA_WORKER_POLL_SECONDS`
+- `ARCA_WORKER_BATCH_SIZE`
 
 Para la API legacy de IA tambien siguen disponibles:
 
@@ -82,6 +89,29 @@ los planes faltantes con UUIDs consecutivos al mayor tenant ya presente.
 Documentacion del modulo:
 
 - [docs/billing.md](docs/billing.md)
+- [docs/arca_invoicing_service.txt](docs/arca_invoicing_service.txt)
+
+## Facturacion ARCA
+
+Los perfiles fiscales y las facturas viven bajo
+`/internal/v1/arca/tenants/{tenant_id}`. Todas las llamadas requieren HTTPS,
+`X-Postas-Source: postas_api` y `X-Postas-Service-Token`.
+
+El worker fiscal es un proceso separado:
+
+```bash
+.\env\Scripts\python.exe -m app.arca.worker
+```
+
+El worker requiere PostgreSQL; no inicia sobre SQLite porque ese dialecto no
+ofrece las garantias de `SKIP LOCKED` y advisory locks usadas por la secuencia.
+
+`docker compose up --build` inicia tambien `arca_worker`. La reserva del numero
+se persiste antes de llamar a ARCA; ante timeout o reinicio, el worker consulta
+primero ese mismo comprobante y adopta un CAE existente.
+
+No habilita produccion por tener un perfil productivo: la instancia tambien
+debe configurar `ARCA_PRODUCTION_CALLS_ENABLED=true`.
 
 ## Ejecutar local
 
@@ -104,4 +134,9 @@ Con entorno local:
 
 ```bash
 .\env\Scripts\python.exe -m pytest tests/test_billing.py -q
+.\env\Scripts\python.exe -m pytest tests/test_arca.py -q
 ```
+
+`tests/test_arca_live.py` es opt-in, rechaza `production` y solo consulta WSFE
+en homologacion; las variables necesarias estan documentadas en
+`docs/arca_invoicing_service.txt`.

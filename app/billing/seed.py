@@ -24,6 +24,7 @@ FEATURE_CATALOG: list[dict[str, str | None]] = [
     {"key": "export_products", "name": "Exportar productos", "description": None, "type": "boolean"},
     {"key": "priority_support", "name": "Soporte prioritario", "description": None, "type": "boolean"},
     {"key": "cashbox_email_report", "name": "Reporte de caja por email", "description": None, "type": "monthly_usage"},
+    {"key": "arca_invoicing", "name": "Facturacion ARCA", "description": "Emision fiscal electronica multi-tenant.", "type": "boolean"},
 ]
 
 
@@ -89,6 +90,7 @@ PLAN_CATALOG: list[dict[str, Any]] = [
             "export_products": (True, None, None),
             "priority_support": (False, None, None),
             "cashbox_email_report": (True, 100, "monthly"),
+            "arca_invoicing": (True, None, None),
         },
     },
     {
@@ -110,6 +112,7 @@ PLAN_CATALOG: list[dict[str, Any]] = [
             "export_products": (True, None, None),
             "priority_support": (True, None, None),
             "cashbox_email_report": (True, 100, "monthly"),
+            "arca_invoicing": (True, None, None),
         },
     },
     {
@@ -138,6 +141,7 @@ PLAN_CATALOG: list[dict[str, Any]] = [
             "export_products": (True, None, None),
             "priority_support": (True, None, None),
             "cashbox_email_report": (True, 1, "monthly"),
+            "arca_invoicing": (True, None, None),
         },
     },
 ]
