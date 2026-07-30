@@ -1,0 +1,25 @@
+Feature:
+Script de inicio local del proyecto
+
+Summary:
+Se agrego un script CMD que inicia main:app mediante el Python del entorno virtual, sin depender de que uvicorn este disponible en el PATH global ni de la politica de ejecucion de PowerShell.
+
+Files changed:
+- start.cmd
+- docs/start_project_script.txt
+
+Tests created or updated:
+- None
+
+Documentation updated:
+- docs/start_project_script.txt
+
+Checks run:
+- Local HTTP startup validation: passed
+- Local Python import validation: passed
+
+Important notes:
+- El puerto predeterminado es 8000 y puede cambiarse pasandolo como primer argumento.
+- La recarga automatica esta habilitada.
+- Uso con el puerto predeterminado: .\start.cmd
+- Uso con otro puerto: .\start.cmd 8001

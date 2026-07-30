@@ -1,0 +1,378 @@
+{
+  "info": {
+    "_postman_id": "74b0507b-9af6-4e48-ae96-cdfce225077f",
+    "name": "Postas - Modulo ARCA",
+    "description": "Coleccion para probar el modulo ARCA de punta a punta. Incluye autenticacion JWT de apoyo, todos los endpoints publicos de postas_api y todos los endpoints internos de postas_platform_api.\n\nUso recomendado:\n1. Completar tenant_id, username y password; ejecutar Login.\n2. Completar service_token con el mismo valor de POSTAS_SERVICE_TOKEN/POSTAS_PLATFORM_SERVICE_TOKEN.\n3. Para configurar un perfil, completar arca_cuit, certificate_pem, private_key_pem y afip_sdk_access_token. Los PEM pueden pegarse con saltos de linea reales.\n4. Ejecutar primero en development. production requiere ARCA_PRODUCTION_CALLS_ENABLED y credenciales productivas.\n5. Un POST de factura con HTTP 202 solo confirma persistencia/encolado; consultar luego por external_id.\n6. Las carpetas publica e interna prueban dos entradas hacia el mismo estado fiscal. Ejecutarlas manualmente por escenario; no correr toda la coleccion como una secuencia repetible.\n7. Las eliminaciones estan aisladas en la ultima carpeta y son destructivas.\n\nLas rutas publicas derivan tenant, actor y ambiente desde el JWT/configuracion. Las rutas internas se incluyen solo para diagnostico service-to-service y no deben exponerse a clientes externos.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "const cv = pm.collectionVariables;",
+          "cv.set('invoice_date', new Date().toISOString().slice(0, 10));",
+          "if (!cv.get('sale_id')) cv.set('sale_id', pm.variables.replaceIn('{{$guid}}'));",
+          "const profile = {",
+          "  arca_cuit: cv.get('arca_cuit') || '',",
+          "  certificate: cv.get('certificate_pem') || '',",
+          "  private_key: cv.get('private_key_pem') || '',",
+          "  access_token: cv.get('afip_sdk_access_token') || '',",
+          "  point_of_sale: Number(cv.get('point_of_sale') || 3),",
+          "  automatic_voucher_type: Number(cv.get('voucher_type') || 6),",
+          "  concept: Number(cv.get('concept') || 1),",
+          "  default_vat_rate: String(cv.get('default_vat_rate') || '21.00'),",
+          "  default_vat_id: Number(cv.get('default_vat_id') || 5)",
+          "};",
+          "pm.variables.set('internal_profile_payload', JSON.stringify(profile, null, 2));",
+          "pm.variables.set('public_profile_payload', JSON.stringify({",
+          "  arca_environment: cv.get('arca_environment') || 'development',",
+          "  automatic_invoicing_enabled: false,",
+          "  ...profile",
+          "}, null, 2));"
+        ]
+      }
+    }
+  ],
+  "variable": [
+    { "key": "postas_api_base_url", "value": "http://localhost:8000", "type": "string" },
+    { "key": "platform_base_url", "value": "http://localhost:8001", "type": "string" },
+    { "key": "tenant_id", "value": "00000000-0000-0000-0000-000000000001", "type": "string" },
+    { "key": "username", "value": "owner", "type": "string" },
+    { "key": "password", "value": "owner1234", "type": "string" },
+    { "key": "jwt_access", "value": "", "type": "string" },
+    { "key": "jwt_refresh", "value": "", "type": "string" },
+    { "key": "service_token", "value": "", "type": "string" },
+    { "key": "service_source", "value": "postas_api", "type": "string" },
+    { "key": "arca_environment", "value": "development", "type": "string" },
+    { "key": "arca_cuit", "value": "", "type": "string" },
+    { "key": "certificate_pem", "value": "", "type": "string" },
+    { "key": "private_key_pem", "value": "", "type": "string" },
+    { "key": "afip_sdk_access_token", "value": "", "type": "string" },
+    { "key": "point_of_sale", "value": "3", "type": "string" },
+    { "key": "voucher_type", "value": "6", "type": "string" },
+    { "key": "concept", "value": "1", "type": "string" },
+    { "key": "default_vat_rate", "value": "21.00", "type": "string" },
+    { "key": "default_vat_id", "value": "5", "type": "string" },
+    { "key": "invoice_date", "value": "", "type": "string" },
+    { "key": "sale_id", "value": "", "type": "string" },
+    { "key": "external_id", "value": "", "type": "string" },
+    { "key": "fiscal_voucher_number", "value": "1", "type": "string" },
+    { "key": "explicit_voucher_number", "value": "1", "type": "string" },
+    { "key": "receiver_doc_type", "value": "99", "type": "string" },
+    { "key": "receiver_doc_number", "value": "0", "type": "string" },
+    { "key": "receiver_iva_condition_id", "value": "5", "type": "string" }
+  ],
+  "item": [
+    {
+      "name": "0 - Autenticacion (apoyo)",
+      "description": "Endpoints de autenticacion de postas_api incluidos para obtener y renovar el JWT usado por la API publica ARCA.",
+      "item": [
+        {
+          "name": "Login y guardar JWT",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "if (pm.response.code === 200) {",
+                  "  const data = pm.response.json();",
+                  "  pm.collectionVariables.set('jwt_access', data.access);",
+                  "  pm.collectionVariables.set('jwt_refresh', data.refresh);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tenant_id\": \"{{tenant_id}}\",\n  \"username\": \"{{username}}\",\n  \"password\": \"{{password}}\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{postas_api_base_url}}/api/v1/auth/login/",
+            "description": "Guarda access y refresh en variables de la coleccion. El usuario OWNER permite probar tambien configuracion y consultas administrativas."
+          }
+        },
+        {
+          "name": "Renovar JWT",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "if (pm.response.code === 200) pm.collectionVariables.set('jwt_access', pm.response.json().access);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refresh\": \"{{jwt_refresh}}\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{postas_api_base_url}}/api/v1/auth/token/refresh/"
+          }
+        }
+      ]
+    },
+    {
+      "name": "1 - API publica ARCA (postas_api)",
+      "description": "Superficie para frontend/clientes. Usa Bearer JWT; tenant_id, actor y ambiente no se reciben desde el body.",
+      "item": [
+        {
+          "name": "Configuracion - Consultar",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('HTTP 200', () => pm.response.to.have.status(200));", "if (pm.response.code === 200) pm.test('No expone secretos', () => { const raw = pm.response.text(); pm.expect(raw).not.to.include('private_key'); pm.expect(raw).not.to.include('access_token'); pm.expect(raw).not.to.include('certificate_encrypted'); });"] } }],
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{jwt_access}}", "type": "string" }] },
+            "method": "GET",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": "{{postas_api_base_url}}/api/v1/arca/configuration/",
+            "description": "Permiso OWNER. Devuelve configuracion local y perfil fiscal activo sin secretos."
+          }
+        },
+        {
+          "name": "Configuracion - Crear o reemplazar perfil",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('HTTP 200', () => pm.response.to.have.status(200));", "if (pm.response.code === 200) pm.test('Perfil validado', () => pm.expect(pm.response.json().profile.validation_status).to.eql('valid'));"] } }],
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{jwt_access}}", "type": "string" }] },
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{{public_profile_payload}}", "options": { "raw": { "language": "json" } } },
+            "url": "{{postas_api_base_url}}/api/v1/arca/configuration/",
+            "description": "Permiso OWNER. Requiere el conjunto completo: CUIT, certificado, clave privada, access token, punto de venta y tipo de comprobante. Ejecuta validacion live contra ARCA."
+          }
+        },
+        {
+          "name": "Configuracion - Activar facturacion automatica",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('HTTP 200', () => pm.response.to.have.status(200));", "if (pm.response.code === 200) pm.expect(pm.response.json().automatic_invoicing_enabled).to.eql(true);"] } }],
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{jwt_access}}", "type": "string" }] },
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"automatic_invoicing_enabled\": true,\n  \"arca_environment\": \"{{arca_environment}}\"\n}", "options": { "raw": { "language": "json" } } },
+            "url": "{{postas_api_base_url}}/api/v1/arca/configuration/",
+            "description": "Permiso OWNER. Exige entitlement, perfil validado y concept=1."
+          }
+        },
+        {
+          "name": "Facturas - Encolar proxima correlativa",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('HTTP 202', () => pm.response.to.have.status(202));", "if (pm.response.code === 202) { const data = pm.response.json(); pm.collectionVariables.set('external_id', data.external_id); if (data.sale_id) pm.collectionVariables.set('sale_id', data.sale_id); if (data.point_of_sale) pm.collectionVariables.set('point_of_sale', data.point_of_sale); if (data.voucher_type) pm.collectionVariables.set('voucher_type', data.voucher_type); if (data.voucher_number) pm.collectionVariables.set('fiscal_voucher_number', data.voucher_number); }"] } }],
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{jwt_access}}", "type": "string" }] },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"external_id\": \"postman-public-{{$guid}}\",\n  \"receiver\": {\n    \"doc_type\": {{receiver_doc_type}},\n    \"doc_number\": \"{{receiver_doc_number}}\",\n    \"iva_condition_id\": {{receiver_iva_condition_id}}\n  },\n  \"invoice_date\": \"{{invoice_date}}\",\n  \"items\": [\n    {\n      \"description\": \"Producto de prueba Postman\",\n      \"quantity\": \"2.0000\",\n      \"final_unit_price\": \"121.00\"\n    }\n  ]\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{postas_api_base_url}}/api/v1/arca/invoices/",
+            "description": "Cualquier usuario autenticado. 202 significa encolada, no aprobada. Guarda external_id para las consultas siguientes. Para servicios agregar las tres fechas y usar un perfil concept=2 o 3."
+          }
+        },
+        {
+          "name": "Facturas - Consultar por external_id",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('HTTP 200', () => pm.response.to.have.status(200));", "if (pm.response.code === 200) { const data = pm.response.json(); pm.expect(data.external_id).to.eql(pm.collectionVariables.get('external_id')); if (data.voucher_number) pm.collectionVariables.set('fiscal_voucher_number', data.voucher_number); }"] } }],
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{jwt_access}}", "type": "string" }] },
+            "method": "GET",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": "{{postas_api_base_url}}/api/v1/arca/invoices/by-external-id/{{external_id}}/",
+            "description": "Emisor original, ADMIN u OWNER. Es la consulta canonica de estado, incluido CAE."
+          }
+        },
+        {
+          "name": "Facturas - Consultar ultima correlativa",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('HTTP 200', () => pm.response.to.have.status(200));", "if (pm.response.code === 200) { const data = pm.response.json(); pm.collectionVariables.set('point_of_sale', data.point_of_sale); pm.collectionVariables.set('voucher_type', data.voucher_type); pm.collectionVariables.set('fiscal_voucher_number', data.last_voucher_number); pm.collectionVariables.set('explicit_voucher_number', Number(data.last_voucher_number) + 1); }"] } }],
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{jwt_access}}", "type": "string" }] },
+            "method": "GET",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": "{{postas_api_base_url}}/api/v1/arca/invoices/last-voucher/?voucher_type={{voucher_type}}",
+            "description": "Permiso ADMIN u OWNER. Guarda la ultima correlativa y calcula explicit_voucher_number=ultima+1."
+          }
+        },
+        {
+          "name": "Facturas - Encolar numero explicito",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('HTTP 202', () => pm.response.to.have.status(202));", "if (pm.response.code === 202) { const data = pm.response.json(); pm.collectionVariables.set('external_id', data.external_id); if (data.voucher_number) pm.collectionVariables.set('fiscal_voucher_number', data.voucher_number); }"] } }],
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{jwt_access}}", "type": "string" }] },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"voucher_number\": {{explicit_voucher_number}},\n  \"external_id\": \"postman-public-explicit-{{$guid}}\",\n  \"receiver\": {\n    \"doc_type\": {{receiver_doc_type}},\n    \"doc_number\": \"{{receiver_doc_number}}\",\n    \"iva_condition_id\": {{receiver_iva_condition_id}}\n  },\n  \"invoice_date\": \"{{invoice_date}}\",\n  \"items\": [\n    {\n      \"description\": \"Producto explicito Postman\",\n      \"quantity\": \"1.0000\",\n      \"final_unit_price\": \"121.00\"\n    }\n  ]\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{postas_api_base_url}}/api/v1/arca/invoices/explicit/",
+            "description": "El numero debe coincidir con la proxima correlativa al procesarse. Tambien sirve para completar receiver_identification_required reutilizando exactamente external_id, sale_id, fechas e items."
+          }
+        },
+        {
+          "name": "Facturas - Consultar por referencia fiscal",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('HTTP 200', () => pm.response.to.have.status(200));"] } }],
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{jwt_access}}", "type": "string" }] },
+            "method": "GET",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": "{{postas_api_base_url}}/api/v1/arca/invoices/fiscal/?environment={{arca_environment}}&point_of_sale={{point_of_sale}}&voucher_type={{voucher_type}}&voucher_number={{fiscal_voucher_number}}",
+            "description": "Permiso ADMIN u OWNER. Requiere una factura ya numerada."
+          }
+        }
+      ]
+    },
+    {
+      "name": "2 - API interna ARCA (postas_platform_api)",
+      "description": "Superficie service-to-service para diagnostico. Requiere X-Postas-Source=postas_api y el token compartido. En produccion requiere HTTPS.",
+      "item": [
+        {
+          "name": "Perfiles - Consultar",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('HTTP 200', () => pm.response.to.have.status(200));"] } }],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "X-Postas-Source", "value": "{{service_source}}" }, { "key": "X-Postas-Service-Token", "value": "{{service_token}}" }, { "key": "Accept", "value": "application/json" }],
+            "url": "{{platform_base_url}}/internal/v1/arca/tenants/{{tenant_id}}/profiles/{{arca_environment}}"
+          }
+        },
+        {
+          "name": "Perfiles - Crear o reemplazar",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('HTTP 200', () => pm.response.to.have.status(200));", "if (pm.response.code === 200) pm.expect(pm.response.json().validation_status).to.eql('pending');"] } }],
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "X-Postas-Source", "value": "{{service_source}}" }, { "key": "X-Postas-Service-Token", "value": "{{service_token}}" }, { "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{{internal_profile_payload}}", "options": { "raw": { "language": "json" } } },
+            "url": "{{platform_base_url}}/internal/v1/arca/tenants/{{tenant_id}}/profiles/{{arca_environment}}",
+            "description": "Persiste credenciales cifradas y responde sin secretos, inicialmente pending."
+          }
+        },
+        {
+          "name": "Perfiles - Validar contra ARCA",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('HTTP 200', () => pm.response.to.have.status(200));", "if (pm.response.code === 200) pm.test('Perfil valido', () => pm.expect(pm.response.json().valid).to.eql(true));"] } }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "X-Postas-Source", "value": "{{service_source}}" }, { "key": "X-Postas-Service-Token", "value": "{{service_token}}" }, { "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{}", "options": { "raw": { "language": "json" } } },
+            "url": "{{platform_base_url}}/internal/v1/arca/tenants/{{tenant_id}}/profiles/{{arca_environment}}/validate"
+          }
+        },
+        {
+          "name": "Perfiles - Rotar keyring",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('HTTP 200', () => pm.response.to.have.status(200));", "if (pm.response.code === 200) pm.expect(pm.response.json()).to.have.property('rotated_profiles');"] } }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "X-Postas-Source", "value": "{{service_source}}" }, { "key": "X-Postas-Service-Token", "value": "{{service_token}}" }, { "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{}", "options": { "raw": { "language": "json" } } },
+            "url": "{{platform_base_url}}/internal/v1/arca/tenants/{{tenant_id}}/profiles/rotate-keyring",
+            "description": "Rota perfiles development y production hacia ARCA_CREDENTIAL_ACTIVE_KEY_ID."
+          }
+        },
+        {
+          "name": "Facturas - Encolar proxima correlativa",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('HTTP 202', () => pm.response.to.have.status(202));", "if (pm.response.code === 202) { const data = pm.response.json(); pm.collectionVariables.set('external_id', data.external_id); if (data.voucher_number) pm.collectionVariables.set('fiscal_voucher_number', data.voucher_number); }"] } }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "X-Postas-Source", "value": "{{service_source}}" }, { "key": "X-Postas-Service-Token", "value": "{{service_token}}" }, { "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"external_id\": \"postman-internal-{{$guid}}\",\n  \"actor_id\": null,\n  \"actor_role\": \"OWNER\",\n  \"receiver\": {\n    \"doc_type\": {{receiver_doc_type}},\n    \"doc_number\": \"{{receiver_doc_number}}\",\n    \"iva_condition_id\": {{receiver_iva_condition_id}}\n  },\n  \"invoice_date\": \"{{invoice_date}}\",\n  \"items\": [\n    { \"description\": \"Producto interno Postman\", \"quantity\": \"1.0000\", \"final_unit_price\": \"121.00\" }\n  ]\n}", "options": { "raw": { "language": "json" } } },
+            "url": "{{platform_base_url}}/internal/v1/arca/tenants/{{tenant_id}}/invoices/{{arca_environment}}"
+          }
+        },
+        {
+          "name": "Facturas - Encolar automatica (outbox)",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('HTTP 202', () => pm.response.to.have.status(202));", "if (pm.response.code === 202) { const data = pm.response.json(); pm.collectionVariables.set('external_id', data.external_id); pm.collectionVariables.set('sale_id', data.sale_id); }"] } }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "X-Postas-Source", "value": "{{service_source}}" }, { "key": "X-Postas-Service-Token", "value": "{{service_token}}" }, { "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"external_id\": \"postman-auto-{{$guid}}\",\n  \"sale_id\": \"{{sale_id}}\",\n  \"actor_id\": null,\n  \"actor_role\": \"OWNER\",\n  \"receiver\": {\n    \"doc_type\": {{receiver_doc_type}},\n    \"doc_number\": \"{{receiver_doc_number}}\",\n    \"iva_condition_id\": {{receiver_iva_condition_id}}\n  },\n  \"invoice_date\": \"{{invoice_date}}\",\n  \"items\": [\n    { \"description\": \"Venta automatica Postman\", \"quantity\": \"1.0000\", \"final_unit_price\": \"121.00\" }\n  ]\n}", "options": { "raw": { "language": "json" } } },
+            "url": "{{platform_base_url}}/internal/v1/arca/tenants/{{tenant_id}}/invoices/{{arca_environment}}/automatic",
+            "description": "Equivale a la entrega del worker de outbox. Solo admite perfiles concept=1."
+          }
+        },
+        {
+          "name": "Facturas - Encolar numero explicito",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('HTTP 202', () => pm.response.to.have.status(202));", "if (pm.response.code === 202) { const data = pm.response.json(); pm.collectionVariables.set('external_id', data.external_id); if (data.voucher_number) pm.collectionVariables.set('fiscal_voucher_number', data.voucher_number); }"] } }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "X-Postas-Source", "value": "{{service_source}}" }, { "key": "X-Postas-Service-Token", "value": "{{service_token}}" }, { "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"voucher_number\": {{explicit_voucher_number}},\n  \"external_id\": \"postman-internal-explicit-{{$guid}}\",\n  \"actor_id\": null,\n  \"actor_role\": \"OWNER\",\n  \"receiver\": {\n    \"doc_type\": {{receiver_doc_type}},\n    \"doc_number\": \"{{receiver_doc_number}}\",\n    \"iva_condition_id\": {{receiver_iva_condition_id}}\n  },\n  \"invoice_date\": \"{{invoice_date}}\",\n  \"items\": [\n    { \"description\": \"Producto explicito interno\", \"quantity\": \"1.0000\", \"final_unit_price\": \"121.00\" }\n  ]\n}", "options": { "raw": { "language": "json" } } },
+            "url": "{{platform_base_url}}/internal/v1/arca/tenants/{{tenant_id}}/invoices/{{arca_environment}}/explicit"
+          }
+        },
+        {
+          "name": "Facturas - Consultar por external_id",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('HTTP 200', () => pm.response.to.have.status(200));", "if (pm.response.code === 200 && pm.response.json().voucher_number) pm.collectionVariables.set('fiscal_voucher_number', pm.response.json().voucher_number);"] } }],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "X-Postas-Source", "value": "{{service_source}}" }, { "key": "X-Postas-Service-Token", "value": "{{service_token}}" }, { "key": "Accept", "value": "application/json" }],
+            "url": "{{platform_base_url}}/internal/v1/arca/tenants/{{tenant_id}}/invoices/by-external-id/{{external_id}}"
+          }
+        },
+        {
+          "name": "Facturas - Consultar por sale_id",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('HTTP 200', () => pm.response.to.have.status(200));"] } }],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "X-Postas-Source", "value": "{{service_source}}" }, { "key": "X-Postas-Service-Token", "value": "{{service_token}}" }, { "key": "Accept", "value": "application/json" }],
+            "url": "{{platform_base_url}}/internal/v1/arca/tenants/{{tenant_id}}/invoices/by-sale/{{sale_id}}",
+            "description": "Ejecutar despues de Encolar automatica."
+          }
+        },
+        {
+          "name": "Facturas - Consultar por referencia fiscal",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('HTTP 200', () => pm.response.to.have.status(200));"] } }],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "X-Postas-Source", "value": "{{service_source}}" }, { "key": "X-Postas-Service-Token", "value": "{{service_token}}" }, { "key": "Accept", "value": "application/json" }],
+            "url": "{{platform_base_url}}/internal/v1/arca/tenants/{{tenant_id}}/invoices/fiscal?environment={{arca_environment}}&point_of_sale={{point_of_sale}}&voucher_type={{voucher_type}}&voucher_number={{fiscal_voucher_number}}"
+          }
+        },
+        {
+          "name": "Facturas - Consultar ultima correlativa",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('HTTP 200', () => pm.response.to.have.status(200));", "if (pm.response.code === 200) { const data = pm.response.json(); pm.collectionVariables.set('point_of_sale', data.point_of_sale); pm.collectionVariables.set('voucher_type', data.voucher_type); pm.collectionVariables.set('fiscal_voucher_number', data.last_voucher_number); pm.collectionVariables.set('explicit_voucher_number', Number(data.last_voucher_number) + 1); }"] } }],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "X-Postas-Source", "value": "{{service_source}}" }, { "key": "X-Postas-Service-Token", "value": "{{service_token}}" }, { "key": "Accept", "value": "application/json" }],
+            "url": "{{platform_base_url}}/internal/v1/arca/tenants/{{tenant_id}}/last-voucher/{{arca_environment}}?voucher_type={{voucher_type}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "3 - Limpieza destructiva",
+      "description": "No ejecutar como parte de una prueba normal. Ambos requests eliminan logicamente el mismo perfil fiscal por superficies diferentes.",
+      "item": [
+        {
+          "name": "API publica - Eliminar configuracion",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('HTTP 204', () => pm.response.to.have.status(204));"] } }],
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{jwt_access}}", "type": "string" }] },
+            "method": "DELETE",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": "{{postas_api_base_url}}/api/v1/arca/configuration/",
+            "description": "DESTRUCTIVO. Permiso OWNER. Elimina logicamente el perfil del ambiente seleccionado y desactiva la automatizacion. Falla con 409 si existen facturas no terminales."
+          }
+        },
+        {
+          "name": "API interna - Eliminar perfil",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('HTTP 204', () => pm.response.to.have.status(204));"] } }],
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "X-Postas-Source", "value": "{{service_source}}" }, { "key": "X-Postas-Service-Token", "value": "{{service_token}}" }, { "key": "Accept", "value": "application/json" }],
+            "url": "{{platform_base_url}}/internal/v1/arca/tenants/{{tenant_id}}/profiles/{{arca_environment}}",
+            "description": "DESTRUCTIVO. Elimina logicamente el perfil y reemplaza secretos por tombstones cifrados."
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -1,132 +1,1314 @@
-Feature:
-Servicio ARCA multi-tenant con facturacion automatica
+# Módulo ARCA multi-tenant
 
-Classification:
-large
+Guía de configuración, validación, APIs, facturación automática, emisión explícita y operación.
 
-Context reviewed:
-- app/core, app/db, app/billing y API interna de postas_platform_api
-- apps/tenants, apps/sales y apps/platform_billing de postas_api
-- arca_invoice_service/ no versionado, usado solo como referencia
-- Documentacion oficial de ARCA y Afip SDK para WSAA, produccion y comprobantes
+Última actualización: 2026-07-28.
 
-Current behavior:
-postas_platform_api administra perfiles fiscales cifrados por tenant y ambiente, valida credenciales contra homologacion o produccion y mantiene facturas idempotentes con recuperacion de resultados inciertos. postas_api confirma ventas junto con una outbox durable y entrega solicitudes automaticas sin bloquear ni revertir la venta.
+## 1. Objetivo y alcance
 
-Proposed behavior:
-Implementado. Platform es la fuente de verdad fiscal y postas_api expone la API autenticada, deriva tenant y actor del JWT y conserva el ambiente dentro del snapshot de cada solicitud.
+El módulo permite que cada tenant configure credenciales fiscales independientes para homologación y producción, y emita comprobantes electrónicos mediante ARCA/WSFE.
 
-Implementation plan:
-1. Agregar keyring Fernet obligatorio, perfiles fiscales y validacion de certificado, clave y CUIT.
-2. Portar facturas, items, correlatividad, idempotencia, timeout y worker al Base/Alembic principal.
-3. Agregar endpoints internos ARCA protegidos por token, source y TLS, con entitlement obligatorio.
-4. Ampliar TenantConfig y crear una outbox transaccional en postas_api.
-5. Agregar cliente/proxy publico ARCA y workers independientes en ambos servicios.
-6. Probar cifrado, tenant isolation, ambientes, permisos, outbox, calculos fiscales y recuperacion.
+La solución está dividida entre dos servicios:
 
-Files changed:
-- app/arca/
-- app/core/config.py
-- app/billing/dependencies.py
-- app/billing/seed.py
-- app/main.py
-- alembic/env.py
-- alembic/versions/20260727_01_arca_multi_tenant.py
-- tests/test_arca.py
-- tests/test_billing.py
-- requirements.txt
-- docker-compose.yml
-- .gitignore
-- .env.example
-- README.md
-- docs/arca_invoicing_service.txt
+- `postas_api`: API pública, permisos de usuario, configuración del tenant, ventas y outbox transaccional.
+- `postas_platform_api`: fuente de verdad fiscal, perfiles cifrados, entitlement, facturas, correlatividad, conexión con Afip SDK/ARCA y worker de emisión.
 
-Tests created or updated:
-- tests/test_arca.py
-- tests/test_billing.py
+El frontend nunca selecciona el tenant fiscal, el CUIT emisor, el ambiente real ni las credenciales utilizadas para emitir. Esos datos se derivan del JWT y de la configuración persistida para el tenant.
 
-Documentation updated:
-- README.md
-- .env.example
-- docs/arca_invoicing_service.txt
+## 2. Arquitectura
 
-Checks run:
-- Context review: passed
-- python -m pytest tests -q: passed (50 tests, 2 opt-in skipped)
-- python -m pytest tests/test_arca_live.py -q: skipped por defecto; solo homologacion opt-in
-- python -m pytest tests/test_arca_postgres.py -q: opt-in mediante ARCA_POSTGRES_TEST_DATABASE_URL
-- python -m py_compile ARCA modules: passed
-- afip.py 1.2.0 import y construccion del wrapper development: passed
-- docker compose config --quiet: passed
+```text
+Cliente / frontend
+       |
+       | JWT del usuario
+       v
+postas_api
+  - TenantConfig
+  - Sale / SaleDetail
+  - arca_fiscal_outbox
+       |
+       | HTTPS
+       | X-Postas-Source: postas_api
+       | X-Postas-Service-Token: <token interno>
+       v
+postas_platform_api
+  - billing / entitlement arca_invoicing
+  - arca_fiscal_profiles
+  - arca_invoices
+  - arca_invoice_items
+       |
+       | cert + key + access_token + CUIT + environment
+       v
+app.afipsdk.com -> WSAA / WSFE de ARCA
+```
 
-Risks:
-- Exposicion de cert, key o access_token.
-- Emision en produccion desde una instancia no habilitada.
-- Duplicacion de comprobantes tras timeouts o concurrencia.
-- Perdida de solicitudes automaticas o acceso cruzado entre tenants.
+Procesos independientes:
 
-Important notes:
-- arca_invoice_service/ permanece no versionado y no sera agregado, eliminado ni modificado.
-- Los precios de ventas se interpretan como finales con IVA incluido.
-- Los comprobantes pendientes conservan el ambiente del snapshot aunque cambie TenantConfig.
+1. API de `postas_api`.
+2. Worker `python manage.py run_arca_outbox_worker`.
+3. API de `postas_platform_api`.
+4. Worker `python -m app.arca.worker`.
+5. PostgreSQL compartido por la API y el worker de cada servicio.
 
-Variables obligatorias y guards:
-- POSTAS_SERVICE_TOKEN: sin valor, la API interna falla cerrada.
-- ALLOWED_REQUEST_SOURCES: debe incluir postas_api; sin lista, falla cerrada.
-- POSTAS_INTERNAL_REQUIRE_TLS=true: exige que ASGI vea el request como HTTPS; detras de un proxy se deben habilitar proxy headers solo para IPs confiables.
-- ARCA_CREDENTIAL_MASTER_KEYS: objeto JSON con key_id como clave y una Fernet key como valor.
-- ARCA_CREDENTIAL_ACTIVE_KEY_ID: key_id usado para nuevas escrituras y rotaciones.
-- ARCA_PRODUCTION_CALLS_ENABLED=false: bloquea toda llamada productiva aunque exista un perfil production valido.
-- ARCA_TIMEOUT_SECONDS=30.
-- ARCA_WORKER_POLL_SECONDS=5.
-- ARCA_WORKER_BATCH_SIZE=20.
-- ARCA_CONSUMER_FINAL_IDENTIFICATION_THRESHOLD=10000000.
+Los workers fallan cerrados si su conexión no usa PostgreSQL. Esto es necesario porque el circuito utiliza `FOR UPDATE SKIP LOCKED` y, en Platform, advisory locks para proteger la numeración fiscal.
 
-Alta y validacion:
-1. Generar una Fernet key fuera del repositorio y cargarla en el keyring externo.
-2. Enviar cert, private_key, access_token, CUIT, punto de venta y configuracion fiscal al PUT interno del perfil.
-3. El alta valida PEM, vigencia, clave correspondiente y CUIT obligatorio en el subject del certificado.
-4. Ejecutar POST /profiles/{environment}/validate para comprobar access_token, WSAA/WSFE, autorizacion y conectividad.
-5. El endpoint nunca devuelve cert, private_key ni access_token.
+## 3. Conceptos importantes
 
-Rotacion:
-1. Agregar la nueva Fernet key al JSON conservando las anteriores.
-2. Cambiar ARCA_CREDENTIAL_ACTIVE_KEY_ID.
-3. Reiniciar la instancia y ejecutar POST /profiles/rotate-keyring para cada tenant.
-4. Verificar credential_key_id y credentials_rotated_at en la respuesta del perfil.
-5. Retirar una clave anterior del keyring solo cuando ningun perfil la referencia.
+### 3.1 Tenant
 
-Workers y recuperacion:
-- Platform: python -m app.arca.worker.
-- postas_api: python manage.py run_arca_outbox_worker.
-- Ambos comandos fallan cerrados si la conexion no es PostgreSQL.
-- Docker Compose inicia arca_worker y arca_outbox_worker como servicios separados.
-- El Compose nativo de Platform usa PostgreSQL y ambos procesos esperan su healthcheck; PLATFORM_DATABASE_URL permite reemplazar la conexion.
-- La outbox usa el UUID de venta como external_id estable.
-- La factura persiste la reserva correlativa antes de llamar a ARCA y consulta la ultima correlativa bajo lock por ambiente, CUIT, punto de venta y tipo.
-- PostgreSQL usa FOR UPDATE SKIP LOCKED y pg_advisory_xact_lock.
-- Tras timeout o muerte del proceso se consulta getVoucherInfo para el mismo numero; solo un not_found confirmado permite reemitir.
-- Los intentos se programan en 0, 1, 10, 30 y 60 minutos; los errores inesperados quedan en quarantined.
+Todo perfil y toda factura pertenecen a un `tenant_id`. En la API pública el tenant sale exclusivamente del JWT (`request.tenant_id`). Un `tenant_id` enviado en el JSON del cliente no participa del circuito.
 
-Pruebas live de homologacion:
-- Configurar ARCA_LIVE_TESTS=1, ARCA_LIVE_ENVIRONMENT=development y las variables ARCA_LIVE_CUIT, ARCA_LIVE_CERTIFICATE, ARCA_LIVE_PRIVATE_KEY, ARCA_LIVE_ACCESS_TOKEN y ARCA_LIVE_POINT_OF_SALE.
-- Ejecutar python -m pytest tests/test_arca_live.py -q.
-- La prueba falla si se intenta usar production y solo consulta la ultima correlativa; no emite comprobantes.
+### 3.2 Ambientes
 
-Concurrencia PostgreSQL:
-- Configurar ARCA_POSTGRES_TEST_DATABASE_URL con una base PostgreSQL accesible y ejecutar python -m pytest tests/test_arca_postgres.py -q.
-- La prueba crea y elimina un schema aislado, fuerza dos emisiones contendiendo por la misma correlativa y comprueba que se asignen 11 y 12 sin duplicados.
+Valores admitidos:
 
-Recuperacion operativa:
-- pending/retrying: mantener ambos workers activos; no crear una nueva solicitud con otro external_id.
-- receiver_identification_required: conservar la venta y completar la misma solicitud mediante el endpoint explicito, con documento y numero de comprobante; no crear otro external_id.
-- fiscal_profile_has_pending_invoices/fiscal_profile_in_use: procesar o resolver solicitudes no terminales antes de reemplazar o eliminar el perfil.
-- failed: corregir credenciales/conectividad y revisar last_error_code antes de reencolar.
-- quarantined: revisar logs y request_payload; resolver el error interno antes de cambiar el estado.
-- production: comprobar environment, arca_cuit, point_of_sale y voucher_type antes de cualquier intervencion manual.
+- `development`: homologación/testing.
+- `production`: producción.
 
-Fuentes:
-- https://www.arca.gob.ar/ws/documentacion/
-- https://docs.afipsdk.com/siguientes-pasos/ir-a-produccion
-- https://www.arca.gob.ar/fe/emision-autorizacion/datos-comprobantes.asp
-- https://www.arca.gob.ar/facturacion/regimen-general/comprobantes.asp
+Cada tenant puede mantener un perfil distinto para cada ambiente. Certificado, clave, token, punto de venta y tipo de comprobante pueden ser diferentes.
+
+El ambiente se copia al snapshot de la outbox cuando se confirma la venta. Cambiar luego `TenantConfig.arca_environment` no mueve solicitudes existentes entre ambientes.
+
+### 3.3 Credenciales y configuración fiscal
+
+Secretos cifrados:
+
+- `certificate`: certificado X.509 PEM de ARCA.
+- `private_key`: clave privada PEM correspondiente al certificado.
+- `access_token`: token de Afip SDK para `app.afipsdk.com`.
+
+Configuración no secreta:
+
+- `arca_cuit`: CUIT representado, 11 dígitos.
+- `point_of_sale`: punto de venta habilitado para Web Services.
+- `automatic_voucher_type`: código de comprobante que se utilizará.
+- `concept`: `1` productos, `2` servicios o `3` productos y servicios.
+- `default_vat_rate`: alícuota usada para separar neto e IVA desde precios finales.
+- `default_vat_id`: identificador de alícuota enviado a WSFE.
+
+El tipo de comprobante debe corresponder a la condición fiscal del emisor y del receptor. Por ejemplo, un responsable inscripto suele emitir comprobantes clase B a consumidor final, mientras que un monotributista o exento emite clase C. El código no infiere esta condición: el OWNER debe configurar el código correcto.
+
+### 3.4 Entitlement
+
+La feature booleana es `arca_invoicing`.
+
+- Habilitada inicialmente: `business`, `business_ai` y `test`.
+- No habilitada inicialmente: `free` y `starter`.
+- `custom`: configuración manual mediante billing.
+
+Se comprueba al configurar credenciales, rotar el keyring, activar automatización y crear facturas.
+
+## 4. Requisitos previos en ARCA y Afip SDK
+
+Antes de configurar un tenant se necesita:
+
+1. CUIT representado.
+2. Clave privada usada para generar el CSR.
+3. Certificado X.509 emitido por ARCA para esa clave y CUIT.
+4. Web Service de Factura Electrónica autorizado para el certificado/representado.
+5. Punto de venta habilitado para Web Services en el ambiente correspondiente.
+6. `access_token` de Afip SDK.
+7. Código de comprobante compatible con la condición fiscal.
+
+Afip SDK recibe `CUIT`, `cert`, `key`, `access_token` y `production`. En este módulo `production` se deriva del ambiente; nunca se recibe desde el frontend.
+
+## 5. Configuración de infraestructura
+
+### 5.1 Dependencias de Platform
+
+La dependencia fiscal está fijada en:
+
+```text
+afip.py==1.2.0
+```
+
+También se utilizan `cryptography` para X.509/Fernet y `psycopg` para PostgreSQL.
+
+### 5.2 Variables de `postas_platform_api`
+
+| Variable | Obligatoria | Valor recomendado / función |
+| --- | --- | --- |
+| `DATABASE_URL` | Sí fuera de Compose | DSN SQLAlchemy. Para el worker debe ser PostgreSQL. |
+| `PLATFORM_DATABASE_URL` | Opcional | Override del DSN utilizado por Docker Compose. |
+| `POSTAS_SERVICE_TOKEN` | Sí | Secreto compartido con `postas_api`; sin valor la API interna responde `503`. |
+| `POSTAS_SERVICE_TOKEN_HEADER` | No | Debe permanecer `X-Postas-Service-Token` para el cliente actual. |
+| `POSTAS_SERVICE_SOURCE_HEADER` | No | Debe permanecer `X-Postas-Source`. |
+| `ALLOWED_REQUEST_SOURCES` | Sí | Debe incluir `postas_api`; sin lista la API falla cerrada. |
+| `POSTAS_INTERNAL_REQUIRE_TLS` | Sí en producción | `true` exige que ASGI vea la request como HTTPS. |
+| `ARCA_CREDENTIAL_MASTER_KEYS` | Sí para usar ARCA | Objeto JSON `key_id -> Fernet key`. No existe fallback. |
+| `ARCA_CREDENTIAL_ACTIVE_KEY_ID` | Sí para usar ARCA | Identificador usado para nuevas escrituras y rotaciones. |
+| `ARCA_PRODUCTION_CALLS_ENABLED` | No | `false` por defecto. Debe habilitarse explícitamente para producción. |
+| `ARCA_TIMEOUT_SECONDS` | No | Timeout de red hacia Afip SDK; default `30`. |
+| `ARCA_WORKER_POLL_SECONDS` | No | Espera del worker sin trabajo; default `5`. |
+| `ARCA_WORKER_BATCH_SIZE` | No | Cantidad máxima por ciclo; default `20`. |
+| `ARCA_CONSUMER_FINAL_IDENTIFICATION_THRESHOLD` | No | Umbral implementado; default `10000000`. Revisar ante cambios normativos. |
+
+Ejemplo sin secretos reales:
+
+```env
+DATABASE_URL=postgresql+psycopg://postas_platform:password@postgres:5432/postas_platform
+POSTAS_SERVICE_TOKEN=<secreto-largo-y-aleatorio>
+POSTAS_SERVICE_TOKEN_HEADER=X-Postas-Service-Token
+POSTAS_SERVICE_SOURCE_HEADER=X-Postas-Source
+ALLOWED_REQUEST_SOURCES=postas_api
+POSTAS_INTERNAL_REQUIRE_TLS=true
+
+ARCA_CREDENTIAL_MASTER_KEYS={"2026-07":"<fernet-key-base64>"}
+ARCA_CREDENTIAL_ACTIVE_KEY_ID=2026-07
+ARCA_PRODUCTION_CALLS_ENABLED=false
+ARCA_TIMEOUT_SECONDS=30
+ARCA_WORKER_POLL_SECONDS=5
+ARCA_WORKER_BATCH_SIZE=20
+ARCA_CONSUMER_FINAL_IDENTIFICATION_THRESHOLD=10000000
+```
+
+Generar una Fernet key:
+
+```powershell
+.\env\Scripts\python.exe -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+```
+
+La salida debe almacenarse en el secret manager del ambiente. No debe versionarse en `.env.example`, Dockerfile, Compose, logs ni documentación.
+
+### 5.3 Variables de `postas_api`
+
+| Variable | Obligatoria | Función |
+| --- | --- | --- |
+| `POSTAS_PLATFORM_API_URL` | Sí | Base URL de Platform, sin `/internal/v1`. |
+| `POSTAS_PLATFORM_SERVICE_TOKEN` | Sí | Mismo valor que `POSTAS_SERVICE_TOKEN`. |
+| `POSTAS_PLATFORM_SOURCE` | Sí | Debe ser `postas_api`. |
+| `POSTAS_PLATFORM_TIMEOUT_SECONDS` | No | Timeout del cliente interno; default `10`. |
+| `POSTAS_PLATFORM_REQUIRE_TLS` | Sí en producción | `True` rechaza una base URL que no sea HTTPS. |
+| `ARCA_OUTBOX_POLL_SECONDS` | No | Espera del worker; default `5`. |
+| `ARCA_OUTBOX_BATCH_SIZE` | No | Cantidad máxima por ciclo; default `20`. |
+
+```env
+POSTAS_PLATFORM_API_URL=https://platform.internal.example
+POSTAS_PLATFORM_SERVICE_TOKEN=<mismo-secreto-de-platform>
+POSTAS_PLATFORM_SOURCE=postas_api
+POSTAS_PLATFORM_TIMEOUT_SECONDS=10
+POSTAS_PLATFORM_REQUIRE_TLS=True
+ARCA_OUTBOX_POLL_SECONDS=5
+ARCA_OUTBOX_BATCH_SIZE=20
+```
+
+Los valores `POSTAS_PLATFORM_REQUIRE_TLS=False` y `POSTAS_INTERNAL_REQUIRE_TLS=false` que aparecen como defaults de desarrollo en Compose no deben trasladarse a producción.
+
+### 5.4 Migraciones y seed
+
+Platform:
+
+```powershell
+.\env\Scripts\python.exe -m alembic upgrade head
+.\env\Scripts\python.exe scripts\seed_billing.py
+```
+
+La migración ARCA es `20260727_01_arca_multi_tenant.py`.
+
+Postas API:
+
+```powershell
+.\env\Scripts\python.exe manage.py migrate
+```
+
+Migraciones involucradas:
+
+- `apps/arca/migrations/0001_initial.py`.
+- `apps/tenants/migrations/0002_tenantconfig_arca.py`.
+
+### 5.5 Procesos
+
+```powershell
+# Platform
+.\env\Scripts\python.exe -m uvicorn main:app --host 0.0.0.0 --port 8001
+.\env\Scripts\python.exe -m app.arca.worker
+
+# postas_api
+.\env\Scripts\python.exe manage.py runserver 0.0.0.0:8000
+.\env\Scripts\python.exe manage.py run_arca_outbox_worker
+```
+
+Con Docker Compose los workers se levantan como servicios independientes.
+
+## 6. Validaciones necesarias
+
+### 6.1 Validación del keyring
+
+Al cifrar o descifrar se valida:
+
+- `ARCA_CREDENTIAL_MASTER_KEYS` existe.
+- Es un objeto JSON no vacío.
+- Todos los IDs y valores son strings.
+- Cada valor es una Fernet key válida.
+- `ARCA_CREDENTIAL_ACTIVE_KEY_ID` existe dentro del keyring.
+- La clave histórica requerida para descifrar sigue disponible.
+
+Errores típicos:
+
+- `credential_keyring_unavailable` con HTTP `503`.
+- “La clave requerida para descifrar las credenciales no está disponible”.
+
+### 6.2 Validación criptográfica local
+
+Antes de persistir el perfil:
+
+1. El certificado debe ser X.509 PEM válido.
+2. La clave debe ser PEM válida y no puede estar protegida con contraseña.
+3. La clave pública derivada de la private key debe coincidir con la del certificado.
+4. El certificado debe estar vigente: no futuro y no vencido.
+5. El certificado debe informar un `SERIAL_NUMBER` con el CUIT.
+6. El CUIT informado debe coincidir con el certificado.
+7. Certificado, clave y token no pueden estar vacíos.
+
+Los tres secretos se cifran antes del commit. Las respuestas sólo exponen huella SHA-256, vencimiento e ID de clave.
+
+### 6.3 Validación fiscal live
+
+Después del `PUT` del perfil, `postas_api` solicita inmediatamente la validación de Platform. Platform crea el cliente Afip SDK y ejecuta una consulta de última correlativa para el punto de venta y tipo configurados.
+
+Esa llamada comprueba en conjunto:
+
+- Descifrado de los tres secretos.
+- Validez del `access_token` de Afip SDK.
+- Obtención/reutilización del Ticket de Acceso de WSAA.
+- Relación entre certificado y CUIT representado.
+- Autorización para WSFE.
+- Existencia/acceso al punto de venta y tipo de comprobante.
+- Conectividad con el ambiente seleccionado.
+- Guard de producción.
+
+Resultado válido:
+
+```json
+{
+  "valid": true,
+  "status": "valid",
+  "error": null
+}
+```
+
+Resultado inválido:
+
+```json
+{
+  "valid": false,
+  "status": "invalid",
+  "error": "ARCA rechazo las credenciales configuradas."
+}
+```
+
+Errores de provider son sanitizados: no se devuelven PEMs, bearer tokens ni `access_token`.
+
+### 6.4 Validación de billing
+
+`arca_invoicing` debe estar habilitada para el tenant. Si no lo está, no se permite:
+
+- Configurar o reemplazar credenciales.
+- Validar o rotar el perfil.
+- Activar facturación automática.
+- Encolar una factura explícita o correlativa.
+
+### 6.5 Validación de producción
+
+Para emitir o validar `production` deben cumplirse ambas condiciones:
+
+1. Existe un perfil `production` válido para el tenant.
+2. La instancia tiene `ARCA_PRODUCTION_CALLS_ENABLED=true`.
+
+Tener credenciales productivas guardadas no habilita por sí solo llamadas productivas.
+
+### 6.6 Validación de permisos y tenant
+
+API pública:
+
+- Configuración: sólo `OWNER`.
+- Crear factura siguiente o explícita: cualquier usuario autenticado.
+- Consultar por `external_id`: emisor original, `ADMIN` u `OWNER`.
+- Consultar referencia fiscal o última correlativa: `ADMIN` u `OWNER`.
+
+Si se informa `sale_id`, la venta debe pertenecer al tenant del JWT. El actor se reemplaza por `request.user.uuid` y `request.user.role`.
+
+API interna:
+
+- `POSTAS_SERVICE_TOKEN` configurado.
+- `ALLOWED_REQUEST_SOURCES` configurado.
+- `X-Postas-Source` permitido y, para ARCA, exactamente `postas_api`.
+- `X-Postas-Service-Token` válido mediante comparación constante.
+- HTTPS cuando `POSTAS_INTERNAL_REQUIRE_TLS=true`.
+
+### 6.7 Validación del perfil para emitir
+
+- Perfil existente para `(tenant_id, environment)`.
+- `validation_status == "valid"`.
+- Entitlement habilitado.
+- Automática: sólo `concept == 1`.
+- Concepto `2` o `3`: requiere `service_start_date`, `service_end_date` y `payment_due_date`.
+- No se puede reemplazar o eliminar un perfil con facturas no terminales.
+- `upsert`, `delete` y `enqueue` bloquean la fila del perfil con `FOR UPDATE` para evitar carreras.
+
+### 6.8 Validación de factura
+
+- `external_id`: requerido, no vacío, máximo 160 caracteres.
+- `sale_id`: UUID opcional.
+- `items`: al menos uno.
+- Descripción: 1 a 255 caracteres.
+- Cantidad: positiva, hasta 4 decimales.
+- Precio final unitario: no negativo, hasta 2 decimales.
+- Documento: sólo dígitos, máximo 20 caracteres.
+- Las tres fechas de servicio se informan juntas.
+- Fecha inicial de servicio no posterior a la final.
+- Número explícito positivo.
+
+Idempotencia:
+
+- Unicidad `(tenant_id, external_id)`.
+- Unicidad `(tenant_id, sale_id)` cuando hay venta.
+- El hash incluye ambiente, voucher explícito y payload canónico.
+- Repetir el mismo `external_id` y contenido devuelve la misma factura.
+- Repetir el `external_id` con otro contenido devuelve `409 idempotency_conflict`.
+
+Referencia fiscal única:
+
+```text
+(environment, arca_cuit, point_of_sale, voucher_type, voucher_number)
+```
+
+### 6.9 Identificación de consumidor final
+
+Si el total es igual o superior a `ARCA_CONSUMER_FINAL_IDENTIFICATION_THRESHOLD` y el receptor sigue como consumidor final genérico (`doc_type=99`, `doc_number=0`), no se emite.
+
+La factura queda en:
+
+```text
+receiver_identification_required
+```
+
+La venta permanece confirmada. Para continuar se usa el endpoint explícito con el mismo `external_id`, mismo `sale_id`, mismos ítems/fechas, documento real y `voucher_number`. El servicio actualiza la misma factura; no debe crearse otra solicitud.
+
+### 6.10 Cálculo neto e IVA
+
+Los precios se interpretan como finales con IVA incluido. Todos los ítems usan la alícuota e ID configurados en el perfil.
+
+```text
+final_item = quantity * final_unit_price
+factor     = 1 + default_vat_rate / 100
+net_item   = final_item / factor
+iva_item   = final_item - net_item
+```
+
+Se redondea por ítem a dos decimales con `ROUND_HALF_UP`.
+
+Ejemplo para precio final `121.00` y alícuota `21.00`:
+
+```json
+{
+  "net_amount": "100.00",
+  "iva_amount": "21.00",
+  "total_amount": "121.00"
+}
+```
+
+## 7. API pública de postas_api
+
+Base:
+
+```text
+/api/v1/arca
+```
+
+Header:
+
+```http
+Authorization: Bearer <JWT>
+Content-Type: application/json
+```
+
+No enviar `tenant_id`, CUIT emisor, ambiente de emisión, certificado, clave o token en endpoints de facturas.
+
+### 7.1 GET /api/v1/arca/configuration/
+
+Permiso: `OWNER`.
+
+Devuelve la configuración activa y el perfil del ambiente seleccionado. Si aún no hay perfil, `profile` es `null`.
+
+Respuesta `200`:
+
+```json
+{
+  "tenant_id": "2bc4288c-b52f-4a10-9e2e-31ebd1b3876a",
+  "automatic_invoicing_enabled": false,
+  "arca_environment": "development",
+  "profile": {
+    "id": 18,
+    "tenant_id": "2bc4288c-b52f-4a10-9e2e-31ebd1b3876a",
+    "environment": "development",
+    "arca_cuit": "20111111112",
+    "certificate_fingerprint": "9a904a62d6d4c850f0370896c88e80d7e16b0a30aa61aca79e30b4f17439c123",
+    "certificate_expires_at": "2027-07-01T23:59:59Z",
+    "credential_key_id": "2026-07",
+    "point_of_sale": 3,
+    "automatic_voucher_type": 6,
+    "concept": 1,
+    "default_vat_rate": "21.00",
+    "default_vat_id": 5,
+    "validation_status": "valid",
+    "validation_error": null,
+    "validated_at": "2026-07-28T14:10:00Z",
+    "credentials_rotated_at": "2026-07-28T14:09:58Z",
+    "created_at": "2026-07-28T14:09:58Z",
+    "updated_at": "2026-07-28T14:10:00Z"
+  }
+}
+```
+
+Nunca aparecen `certificate`, `private_key` ni `access_token`.
+
+### 7.2 PUT /api/v1/arca/configuration/
+
+Permiso: `OWNER`.
+
+#### Alta o reemplazo de credenciales
+
+Si se envía cualquiera de los campos fiscales principales, deben enviarse juntos:
+
+- `arca_cuit`
+- `certificate`
+- `private_key`
+- `access_token`
+- `point_of_sale`
+- `automatic_voucher_type`
+
+La actualización parcial del perfil fiscal no está soportada. Para cambiar solamente `concept`, `default_vat_rate`, `default_vat_id`, punto de venta o tipo de comprobante también debe reenviarse el conjunto completo de credenciales y configuración.
+
+Request:
+
+```json
+{
+  "arca_environment": "development",
+  "automatic_invoicing_enabled": false,
+  "arca_cuit": "20111111112",
+  "certificate": "-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----",
+  "private_key": "-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----",
+  "access_token": "<afip-sdk-access-token>",
+  "point_of_sale": 3,
+  "automatic_voucher_type": 6,
+  "concept": 1,
+  "default_vat_rate": "21.00",
+  "default_vat_id": 5
+}
+```
+
+La operación ejecuta en orden:
+
+1. Validación de serializer.
+2. Entitlement.
+3. Validación X.509/clave/CUIT.
+4. Cifrado y persistencia con estado `pending`.
+5. Validación live contra el ambiente.
+6. Respuesta sin secretos.
+
+Respuesta `200`: misma forma que `GET configuration`, con `validation_status: "valid"`.
+
+Si la validación live falla, respuesta `400`:
+
+```json
+{
+  "code": "fiscal_profile_invalid",
+  "message": "ARCA rechazo las credenciales configuradas."
+}
+```
+
+#### Activar automatización o cambiar ambiente
+
+No es necesario reenviar secretos:
+
+```json
+{
+  "automatic_invoicing_enabled": true,
+  "arca_environment": "development"
+}
+```
+
+Para habilitarla se exige entitlement, perfil existente, perfil `valid` y `concept=1`.
+
+Errores posibles:
+
+```json
+{
+  "code": "fiscal_profile_not_valid",
+  "message": "El perfil fiscal debe estar validado para activar la automatizacion."
+}
+```
+
+```json
+{
+  "code": "automatic_invoicing_requires_products_concept",
+  "message": "La facturacion automatica de ventas requiere un perfil con concepto productos."
+}
+```
+
+Ambos usan HTTP `409`.
+
+### 7.3 DELETE /api/v1/arca/configuration/
+
+Permiso: `OWNER`.
+
+Elimina lógicamente el perfil del ambiente seleccionado y desactiva la automatización. Los secretos se reemplazan por tombstones cifrados.
+
+Respuesta:
+
+```text
+204 No Content
+```
+
+Si hay facturas no terminales:
+
+```json
+{
+  "code": "fiscal_profile_in_use",
+  "message": "El perfil posee facturas pendientes y no puede eliminarse."
+}
+```
+
+HTTP `409`.
+
+### 7.4 POST /api/v1/arca/invoices/
+
+Permiso: cualquier usuario autenticado.
+
+Crea una solicitud con la próxima correlativa. El número se asigna en el worker de Platform.
+
+Request de productos:
+
+```json
+{
+  "external_id": "manual-order-2026-000184",
+  "sale_id": "1250d487-5d6c-46a0-badb-b389e32359de",
+  "receiver": {
+    "doc_type": 99,
+    "doc_number": "0",
+    "iva_condition_id": 5
+  },
+  "invoice_date": "2026-07-28",
+  "items": [
+    {
+      "description": "Producto A",
+      "quantity": "2.0000",
+      "final_unit_price": "121.00"
+    }
+  ]
+}
+```
+
+Request de servicios para un perfil `concept=2` o `3`:
+
+```json
+{
+  "external_id": "service-2026-000021",
+  "receiver": {
+    "doc_type": 80,
+    "doc_number": "20333333334",
+    "iva_condition_id": 1
+  },
+  "invoice_date": "2026-07-28",
+  "service_start_date": "2026-07-01",
+  "service_end_date": "2026-07-31",
+  "payment_due_date": "2026-08-10",
+  "items": [
+    {
+      "description": "Servicio mensual",
+      "quantity": "1.0000",
+      "final_unit_price": "12100.00"
+    }
+  ]
+}
+```
+
+Respuesta `202`:
+
+```json
+{
+  "id": 901,
+  "tenant_id": "2bc4288c-b52f-4a10-9e2e-31ebd1b3876a",
+  "environment": "development",
+  "fiscal_profile_id": 18,
+  "sale_id": "1250d487-5d6c-46a0-badb-b389e32359de",
+  "external_id": "manual-order-2026-000184",
+  "actor_id": "7dfd20b8-7558-4c0b-a1df-824edc205cd8",
+  "actor_role": "EMPLOYEE",
+  "status": "pending",
+  "point_of_sale": 3,
+  "voucher_type": 6,
+  "voucher_number": null,
+  "net_amount": "200.00",
+  "iva_amount": "42.00",
+  "total_amount": "242.00",
+  "cae": null,
+  "cae_expiration_date": null,
+  "observations": [],
+  "attempt_count": 0,
+  "next_retry_at": "2026-07-28T14:30:00Z",
+  "error": null,
+  "created_at": "2026-07-28T14:30:00Z",
+  "updated_at": "2026-07-28T14:30:00Z"
+}
+```
+
+`202` significa “persistida/encolada”, no “aprobada por ARCA”.
+
+### 7.5 POST /api/v1/arca/invoices/explicit/
+
+Permiso: cualquier usuario autenticado.
+
+Mismo payload que el endpoint anterior, agregando:
+
+```json
+{
+  "voucher_number": 184,
+  "external_id": "manual-order-2026-000184",
+  "receiver": {
+    "doc_type": 80,
+    "doc_number": "20333333334",
+    "iva_condition_id": 1
+  },
+  "items": [
+    {
+      "description": "Producto A",
+      "quantity": "2.0000",
+      "final_unit_price": "121.00"
+    }
+  ]
+}
+```
+
+Respuesta `202`: forma común de factura; `voucher_number` ya contiene `184`.
+
+El número explícito debe coincidir con la próxima correlativa disponible cuando el worker procese la factura. De lo contrario finaliza con `correlative_conflict`.
+
+Este endpoint también completa una factura `receiver_identification_required`: debe reutilizar exactamente `external_id`, `sale_id`, fechas e ítems y sólo completar el receptor y número.
+
+### 7.6 GET /api/v1/arca/invoices/by-external-id/{external_id}/
+
+Permiso: emisor original, `ADMIN` u `OWNER`.
+
+Ejemplo:
+
+```http
+GET /api/v1/arca/invoices/by-external-id/1250d487-5d6c-46a0-badb-b389e32359de/
+Authorization: Bearer <JWT>
+```
+
+Respuesta aprobada `200`:
+
+```json
+{
+  "id": 901,
+  "tenant_id": "2bc4288c-b52f-4a10-9e2e-31ebd1b3876a",
+  "environment": "development",
+  "fiscal_profile_id": 18,
+  "sale_id": "1250d487-5d6c-46a0-badb-b389e32359de",
+  "external_id": "1250d487-5d6c-46a0-badb-b389e32359de",
+  "actor_id": "7dfd20b8-7558-4c0b-a1df-824edc205cd8",
+  "actor_role": "EMPLOYEE",
+  "status": "approved",
+  "point_of_sale": 3,
+  "voucher_type": 6,
+  "voucher_number": 184,
+  "net_amount": "100.00",
+  "iva_amount": "21.00",
+  "total_amount": "121.00",
+  "cae": "70000000000001",
+  "cae_expiration_date": "2026-08-07",
+  "observations": [],
+  "attempt_count": 1,
+  "next_retry_at": null,
+  "error": null,
+  "created_at": "2026-07-28T14:30:00Z",
+  "updated_at": "2026-07-28T14:30:05Z"
+}
+```
+
+Un usuario de otro tenant o un usuario que no sea emisor recibe `404`, para no revelar existencia.
+
+### 7.7 GET /api/v1/arca/invoices/fiscal/
+
+Permiso: `ADMIN` u `OWNER`.
+
+Query params obligatorios:
+
+- `environment`
+- `point_of_sale`
+- `voucher_type`
+- `voucher_number`
+
+```http
+GET /api/v1/arca/invoices/fiscal/?environment=development&point_of_sale=3&voucher_type=6&voucher_number=184
+Authorization: Bearer <JWT>
+```
+
+Respuesta `200`: forma común de factura.
+
+### 7.8 GET /api/v1/arca/invoices/last-voucher/
+
+Permiso: `ADMIN` u `OWNER`.
+
+El ambiente sale de `TenantConfig`. `voucher_type` es opcional; si se omite se usa `automatic_voucher_type` del perfil.
+
+```http
+GET /api/v1/arca/invoices/last-voucher/?voucher_type=6
+Authorization: Bearer <JWT>
+```
+
+Respuesta `200`:
+
+```json
+{
+  "environment": "development",
+  "point_of_sale": 3,
+  "voucher_type": 6,
+  "last_voucher_number": 183
+}
+```
+
+## 8. API interna de postas_platform_api
+
+Base:
+
+```text
+/internal/v1/arca/tenants/{tenant_id}
+```
+
+Headers obligatorios:
+
+```http
+X-Postas-Source: postas_api
+X-Postas-Service-Token: <token-interno>
+Content-Type: application/json
+```
+
+En producción la conexión debe ser HTTPS.
+
+Los clientes externos no deben consumir estos endpoints directamente.
+
+### 8.1 Perfiles
+
+#### GET /profiles/{environment}
+
+Respuesta `200`: objeto `FiscalProfileResponse` mostrado en `GET configuration`.
+
+#### PUT /profiles/{environment}
+
+Request:
+
+```json
+{
+  "arca_cuit": "20111111112",
+  "certificate": "-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----",
+  "private_key": "-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----",
+  "access_token": "<afip-sdk-access-token>",
+  "point_of_sale": 3,
+  "automatic_voucher_type": 6,
+  "concept": 1,
+  "default_vat_rate": "21.00",
+  "default_vat_id": 5
+}
+```
+
+Respuesta `200`: perfil sin secretos, inicialmente con `validation_status: "pending"`.
+
+#### DELETE /profiles/{environment}
+
+Respuesta `204 No Content`.
+
+#### POST /profiles/{environment}/validate
+
+Body: no requerido.
+
+Respuesta `200` válida o inválida:
+
+```json
+{
+  "valid": true,
+  "status": "valid",
+  "error": null
+}
+```
+
+#### POST /profiles/rotate-keyring
+
+Rota los perfiles `development` y `production` del tenant a la clave activa.
+
+Respuesta `200`:
+
+```json
+{
+  "rotated_profiles": 2
+}
+```
+
+### 8.2 Facturas
+
+#### POST /invoices/{environment}
+
+Encola factura con numeración siguiente. Request: `InvoiceCreateRequest`. Respuesta `202`: forma común de factura.
+
+#### POST /invoices/{environment}/automatic
+
+Usado por el worker de outbox. Sólo admite un perfil `concept=1`. Request: snapshot automático. Respuesta `202`.
+
+#### POST /invoices/{environment}/explicit
+
+Request: `InvoiceCreateRequest` más `voucher_number`. Respuesta `202`.
+
+#### GET /invoices/by-external-id/{external_id}
+
+Respuesta `200`: forma común de factura, limitada al `tenant_id` del path.
+
+#### GET /invoices/by-sale/{sale_id}
+
+Respuesta `200`: factura única asociada a la venta y tenant.
+
+#### GET /invoices/fiscal
+
+Query params: `environment`, `point_of_sale`, `voucher_type`, `voucher_number`.
+
+Respuesta `200`: factura persistida para esa referencia.
+
+#### GET /last-voucher/{environment}
+
+Query param opcional: `voucher_type`.
+
+Respuesta `200`:
+
+```json
+{
+  "environment": "development",
+  "point_of_sale": 3,
+  "voucher_type": 6,
+  "last_voucher_number": 183
+}
+```
+
+### 8.3 Forma de error interna
+
+Los errores de dominio FastAPI se envuelven en `detail`:
+
+```json
+{
+  "detail": {
+    "code": "fiscal_profile_not_valid",
+    "message": "El perfil fiscal debe estar validado antes de emitir."
+  }
+}
+```
+
+`postas_api` normaliza esa forma para el cliente público:
+
+```json
+{
+  "code": "fiscal_profile_not_valid",
+  "message": "El perfil fiscal debe estar validado antes de emitir."
+}
+```
+
+Los errores de validación FastAPI `422` mantienen la forma estándar con `detail` como lista.
+
+## 9. Circuito completo de datos
+
+### 9.1 Alta de configuración
+
+```text
+OWNER
+  -> PUT /api/v1/arca/configuration/
+  -> postas_api toma tenant_id del JWT
+  -> verifica entitlement arca_invoicing en Platform
+  -> PUT interno del perfil
+  -> Platform valida PEM, key, vigencia y CUIT
+  -> cifra cert/key/access_token con la Fernet key activa
+  -> guarda arca_fiscal_profiles con status=pending
+  -> POST interno /validate
+  -> Afip SDK obtiene TA y consulta WSFE
+  -> Platform marca valid o invalid
+  -> postas_api devuelve configuración sin secretos
+```
+
+### 9.2 Venta con facturación automática
+
+```text
+Usuario confirma venta
+  -> SaleCreateSerializer abre transaction.atomic
+  -> valida caja, productos, stock y pagos
+  -> descuenta stock
+  -> crea Sale y SaleDetail
+  -> lee TenantConfig
+       automatic_invoicing_enabled=false
+         -> no crea solicitud fiscal
+       automatic_invoicing_enabled=true
+         -> crea FiscalOutboxRequest en la misma transacción
+  -> commit de venta + detalles + outbox
+  -> respuesta de venta inmediata
+```
+
+Snapshot guardado en `arca_fiscal_outbox.payload_snapshot`:
+
+```json
+{
+  "external_id": "1250d487-5d6c-46a0-badb-b389e32359de",
+  "sale_id": "1250d487-5d6c-46a0-badb-b389e32359de",
+  "actor_id": "7dfd20b8-7558-4c0b-a1df-824edc205cd8",
+  "actor_role": "EMPLOYEE",
+  "receiver": {
+    "doc_type": 99,
+    "doc_number": "0",
+    "iva_condition_id": 5
+  },
+  "invoice_date": "2026-07-28",
+  "items": [
+    {
+      "description": "Producto A",
+      "quantity": "1.000",
+      "final_unit_price": "121.00"
+    }
+  ]
+}
+```
+
+Además del payload, la fila fija `tenant_id`, `environment`, `sale_id`, `created_by` y `external_id`.
+
+Campos ARCA dentro de la respuesta inmediata de venta (el objeto conserva además todos los campos normales de `SaleReadSerializer`):
+
+```json
+{
+  "uuid": "1250d487-5d6c-46a0-badb-b389e32359de",
+  "status": "confirmed",
+  "invoice_status": "pending",
+  "invoice_tracking_id": "1250d487-5d6c-46a0-badb-b389e32359de"
+}
+```
+
+La venta no espera a ARCA y no se revierte si Platform, Afip SDK o ARCA están caídos.
+
+El `invoice_status` embebido en la venta representa el estado local conocido por la outbox. El seguimiento fiscal canónico, incluido el CAE final, se realiza por `GET /api/v1/arca/invoices/by-external-id/{invoice_tracking_id}/`.
+
+### 9.3 Entrega de outbox a Platform
+
+```text
+ArcaOutboxWorker
+  -> selecciona una fila due con FOR UPDATE SKIP LOCKED
+  -> pending/retrying/sending stale -> sending
+  -> incrementa attempt_count y fija locked_at
+  -> POST interno /invoices/{environment}/automatic
+  -> Platform valida token/source/TLS/tenant/entitlement/perfil
+  -> crea arca_invoices y arca_invoice_items idempotentemente
+  -> outbox pasa a sent y guarda platform_invoice_id
+```
+
+Si Platform no responde:
+
+- La venta queda confirmada.
+- La outbox pasa a `retrying`.
+- `invoice_status` queda `platform_pending`.
+- Se reutilizan `tenant_id`, `environment`, `external_id` y el mismo snapshot.
+- Tras agotar cinco intentos pasa a `failed`.
+
+### 9.4 Emisión en Platform
+
+```text
+ArcaInvoiceWorker
+  -> reclama arca_invoices due con FOR UPDATE SKIP LOCKED
+  -> carga el perfil exacto del tenant y ambiente
+  -> status=processing, incrementa attempt_count y persiste lease
+  -> descifra cert/key/access_token
+  -> crea cliente Afip SDK con CUIT y production derivado
+  -> si ya hay voucher_number y es reintento:
+       consulta getVoucherInfo del mismo comprobante
+       si tiene CAE -> adopta resultado y termina approved
+       si consulta es incierta -> no reemite
+  -> adquiere advisory lock por environment/CUIT/POS/tipo
+  -> consulta getLastVoucher
+  -> calcula siguiente número
+  -> verifica que otra factura no lo tenga reservado
+  -> persiste voucher_number antes de llamar a ARCA
+  -> createVoucher
+  -> normaliza CAE/CodAutorizacion, vencimiento y observaciones
+  -> approved o retrying/rejected/failed
+```
+
+La reserva durable antes de la llamada externa permite recuperar incluso si el proceso muere después de que ARCA autoriza y antes de guardar la respuesta.
+
+### 9.5 Seguimiento
+
+El frontend utiliza `invoice_tracking_id` como `external_id`:
+
+```http
+GET /api/v1/arca/invoices/by-external-id/{invoice_tracking_id}/
+```
+
+Se recomienda polling con backoff hasta un estado terminal:
+
+- `approved`
+- `rejected`
+- `failed`
+- `quarantined`
+- `receiver_identification_required`
+
+### 9.6 Emisión explícita
+
+```text
+Usuario autenticado
+  -> POST /api/v1/arca/invoices/explicit/
+  -> postas_api deriva tenant/actor/ambiente
+  -> Platform persiste voucher_number explícito
+  -> worker valida correlativa y emite
+  -> seguimiento por external_id
+```
+
+### 9.7 Receptor obligatorio
+
+```text
+Factura automática supera umbral sin documento
+  -> Platform guarda receiver_identification_required
+  -> venta sigue confirmed
+  -> usuario obtiene documento y próxima correlativa
+  -> POST explícito con mismo external_id y sale_id
+  -> Platform permite cambiar sólo receiver y voucher_number
+  -> misma arca_invoice vuelve a pending
+  -> worker emite y obtiene CAE
+```
+
+## 10. Estados y reintentos
+
+### 10.1 Outbox de postas_api
+
+| Estado | Significado |
+| --- | --- |
+| `pending` | Creada junto con la venta. |
+| `sending` | Reclamada por un worker. |
+| `retrying` | Falló la entrega a Platform y tiene próximo intento. |
+| `sent` | Platform aceptó idempotentemente la factura. |
+| `failed` | Se agotaron los intentos de entrega. |
+
+Un lock `sending` con más de cinco minutos se considera stale y puede recuperarse.
+
+### 10.2 Factura en Platform
+
+| Estado | Terminal | Significado |
+| --- | --- | --- |
+| `pending` | No | Persistida y lista para el worker. |
+| `processing` | No | Reclamada y con lease. |
+| `retrying` | No | Error retryable con próximo intento. |
+| `receiver_identification_required` | Sí operativamente | Requiere completar receptor por flujo explícito. |
+| `approved` | Sí | ARCA autorizó y se persistió CAE. |
+| `rejected` | Sí | ARCA o la correlativa rechazaron la solicitud. |
+| `failed` | Sí | Error retryable agotado o perfil inválido. |
+| `quarantined` | Sí | Error interno inesperado del worker. |
+
+### 10.3 Cronograma
+
+La solicitud queda disponible inmediatamente (`0`). Los reintentos posteriores se programan a `1`, `10`, `30` y `60` minutos. El quinto intento fallido termina en `failed`.
+
+## 11. Errores relevantes
+
+| Código | HTTP habitual | Acción |
+| --- | --- | --- |
+| `feature_not_enabled` | 403 | Habilitar `arca_invoicing` para el plan/tenant. |
+| `fiscal_profile_not_found` | 404 | Configurar el perfil del ambiente. |
+| `fiscal_profile_not_valid` | 409 | Corregir y validar credenciales. |
+| `invalid_credentials` | 422 | Revisar PEM, key, vigencia y CUIT. |
+| `credential_keyring_unavailable` | 503 | Restaurar keyring e ID activo. |
+| `fiscal_profile_invalid` / rechazo por producción deshabilitada | 400 | Habilitar el guard sólo en una instancia productiva autorizada y volver a validar. |
+| `idempotency_conflict` | 409 | Reutilizar exactamente el payload original o usar otro ID para otra operación. |
+| `fiscal_reference_conflict` | 409 | No reutilizar número fiscal reservado. |
+| `automatic_invoicing_requires_products_concept` | 409 | Usar concepto 1 o emisión manual. |
+| `service_dates_required` | 422 | Informar las tres fechas. |
+| `receiver_identification_required` | 202 con estado | Completar misma factura explícitamente. |
+| `explicit_voucher_required` | 409 | Usar endpoint explícito y voucher. |
+| `sequence_busy` | Estado retrying | Esperar; otra solicitud tiene la correlativa reservada. |
+| `correlative_conflict` | Estado rejected | Consultar última correlativa y revisar número explícito. |
+| `arca_timeout` | Estado retrying | No reemitir manualmente; el worker consultará el mismo voucher. |
+| `arca_unavailable` | Estado retrying/failed | Revisar conectividad y dejar actuar los reintentos. |
+| `arca_auth_error` | Estado rejected/invalid | Revisar token, certificado, autorización y ambiente. |
+| `arca_rejected` | Estado rejected | Revisar mensaje/observaciones fiscales. |
+| `invoice_not_found` | 404 | Verificar tenant y referencia. |
+
+También pueden aparecer:
+
+- `401`: JWT ausente o inválido en API pública.
+- `403`: rol insuficiente, source/token interno inválido o TLS requerido.
+- `422`: serializer/Pydantic rechazó el request.
+- `502`: Platform devolvió JSON inválido al proxy.
+- `503`: configuración interna incompleta o conexión imposible.
+- `504`: timeout del cliente `postas_api -> Platform`.
+
+## 12. Persistencia
+
+### 12.1 postas_api
+
+`tenant_configs`:
+
+- `automatic_invoicing_enabled`
+- `arca_environment`
+
+`arca_fiscal_outbox`:
+
+- Tenant, venta y actor.
+- Ambiente fijado.
+- `external_id`.
+- Snapshot de receptor, fecha e ítems.
+- Estado, intentos, lock, errores e ID de factura Platform.
+
+Restricciones:
+
+- One-to-one con `Sale`.
+- Unique `(tenant_id, external_id)`.
+
+### 12.2 postas_platform_api
+
+`arca_fiscal_profiles`:
+
+- Unique `(tenant_id, environment)`.
+- Tres secretos cifrados.
+- Huella/vencimiento del certificado.
+- Configuración fiscal y estado de validación.
+- ID y fecha de rotación de keyring.
+
+`arca_invoices`:
+
+- Snapshot fiscal de tenant, ambiente, perfil, CUIT, POS, tipo, concepto y receptor.
+- `sale_id`, actor, `external_id`, hash y request original.
+- Importes neto/IVA/total.
+- Correlativa, CAE, vencimiento, respuesta ARCA y observaciones.
+- Estado, intentos y errores.
+
+`arca_invoice_items`:
+
+- Descripción, cantidad y precio final.
+- Subtotal final, neto, tasa/ID IVA e IVA calculado.
+
+## 13. Rotación de credenciales
+
+### 13.1 Rotar la Fernet master key
+
+1. Generar una nueva Fernet key.
+2. Agregarla a `ARCA_CREDENTIAL_MASTER_KEYS` sin retirar las anteriores.
+3. Cambiar `ARCA_CREDENTIAL_ACTIVE_KEY_ID`.
+4. Reiniciar API y worker.
+5. Ejecutar `POST /profiles/rotate-keyring` por tenant.
+6. Confirmar `credential_key_id`, `credentials_rotated_at` y `rotated_profiles`.
+7. Buscar perfiles que aún referencien la clave anterior.
+8. Retirarla sólo cuando el conteo sea cero.
+
+Si se retira antes, esos perfiles no podrán descifrarse.
+
+### 13.2 Rotar certificado, private key o access token
+
+Usar `PUT /api/v1/arca/configuration/` con el conjunto completo. No puede reemplazarse el perfil mientras haya facturas no terminales.
+
+La actualización vuelve el perfil a `pending` y ejecuta validación live antes de responder como válido.
+
+## 14. Recuperación operativa
+
+### 14.1 Timeout incierto
+
+No crear otra factura ni cambiar `external_id`. El número ya fue reservado. El worker consultará `getVoucherInfo(voucher_number, point_of_sale, voucher_type)`:
+
+- Si encuentra CAE, lo adopta sin reemitir.
+- Si la consulta falla, reintenta la consulta y no emite.
+- Sólo si ARCA confirma “no encontrado” vuelve a intentar `createVoucher` para ese mismo número.
+
+### 14.2 Outbox failed
+
+1. Verificar conectividad `postas_api -> Platform`.
+2. Verificar token, source y TLS.
+3. Consultar si Platform ya tiene la factura por `external_id`.
+4. No generar otro ID para la misma venta.
+5. Corregir el problema y reprogramar la fila de outbox de forma controlada.
+
+### 14.3 Quarantined
+
+1. Revisar logs por `invoice_id`.
+2. Inspeccionar `request_payload`, `voucher_number`, `last_error_code` y respuesta persistida.
+3. Si hay número reservado, consultar el mismo comprobante antes de cambiar estado.
+4. Resolver el bug interno antes de reactivar la fila.
+
+### 14.4 Perfil vencido o inválido
+
+1. Desactivar automatización si el problema no será inmediato.
+2. Esperar/resolver solicitudes no terminales.
+3. Reemplazar certificado/clave/token completos.
+4. Validar en el mismo ambiente.
+5. Reactivar automatización.
+
+## 15. Checklist de producción
+
+- [ ] Migraciones aplicadas en ambos servicios.
+- [ ] Seed de billing aplicado.
+- [ ] PostgreSQL configurado para APIs y workers.
+- [ ] `POSTAS_SERVICE_TOKEN` largo, aleatorio y compartido de forma segura.
+- [ ] `ALLOWED_REQUEST_SOURCES=postas_api` o lista que lo incluya.
+- [ ] URL interna HTTPS.
+- [ ] `POSTAS_PLATFORM_REQUIRE_TLS=True`.
+- [ ] `POSTAS_INTERNAL_REQUIRE_TLS=true`.
+- [ ] Keyring Fernet almacenado fuera del repositorio.
+- [ ] Claves históricas conservadas durante rotación.
+- [ ] Perfil `production` distinto del perfil de homologación.
+- [ ] Certificado vigente y correspondiente a la private key.
+- [ ] CUIT correcto y WSFE autorizado.
+- [ ] Punto de venta Web Services habilitado.
+- [ ] Tipo de comprobante revisado por responsable fiscal.
+- [ ] Perfil validado live.
+- [ ] `ARCA_PRODUCTION_CALLS_ENABLED=true` sólo en instancias productivas autorizadas.
+- [ ] Ambos workers activos y monitorizados.
+- [ ] Alertas sobre `failed`, `quarantined`, certificados próximos a vencer y outbox atrasada.
+- [ ] Backups cifrados y procedimiento de restauración del keyring.
+
+## 16. Pruebas
+
+Platform:
+
+```powershell
+.\env\Scripts\python.exe -m pytest tests -q
+```
+
+Postas API:
+
+```powershell
+.\env\Scripts\python.exe manage.py test apps.arca apps.sales apps.tenants apps.platform_billing --noinput
+.\env\Scripts\python.exe manage.py check
+.\env\Scripts\python.exe manage.py makemigrations --check --dry-run
+```
+
+Concurrencia PostgreSQL opt-in:
+
+```powershell
+$env:ARCA_POSTGRES_TEST_DATABASE_URL="postgresql+psycopg://..."
+.\env\Scripts\python.exe -m pytest tests/test_arca_postgres.py -q
+```
+
+La prueba crea un schema aislado, fuerza contención sobre la misma correlativa y lo elimina al terminar.
+
+Homologación live opt-in:
+
+```powershell
+$env:ARCA_LIVE_TESTS="1"
+$env:ARCA_LIVE_ENVIRONMENT="development"
+$env:ARCA_LIVE_CUIT="20111111112"
+$env:ARCA_LIVE_CERTIFICATE="<PEM>"
+$env:ARCA_LIVE_PRIVATE_KEY="<PEM>"
+$env:ARCA_LIVE_ACCESS_TOKEN="<token>"
+$env:ARCA_LIVE_POINT_OF_SALE="3"
+$env:ARCA_LIVE_VOUCHER_TYPE="6"
+.\env\Scripts\python.exe -m pytest tests/test_arca_live.py -q
+```
+
+La prueba rechaza `production` y sólo consulta WSFE; no emite comprobantes.
+
+## 17. Referencias
+
+- Arquitectura y documentación de Web Services ARCA: https://www.arca.gob.ar/ws/documentacion/
+- Datos obligatorios de comprobantes: https://www.arca.gob.ar/fe/emision-autorizacion/datos-comprobantes.asp
+- Clases de comprobantes: https://www.arca.gob.ar/facturacion/regimen-general/comprobantes.asp
+- Afip SDK, producción: https://docs.afipsdk.com/paso-a-paso/ir-a-produccion
+- Afip SDK, autorización del Web Service: https://docs.afipsdk.com/recursos/tutoriales-pagina-de-arca/autorizar-web-service-de-produccion
+
+La normativa fiscal y los umbrales pueden cambiar. Antes de habilitar producción deben revisarse las fuentes oficiales y validar la configuración con el responsable fiscal del tenant.

@@ -1,0 +1,4393 @@
+{
+  "info": {
+    "_postman_id": "6fd60269-9504-4ba4-a9a0-c32c8069fbb9",
+    "name": "Postas API - Completa (sin ARCA)",
+    "description": "Coleccion completa de postas_api agrupada por modulo. ARCA se excluye porque vive en la coleccion dedicada postas_arca.postman_collection.json.\n\nFlujo sugerido: Login -> crear categoria -> crear producto -> abrir caja -> crear venta. Los tests guardan automaticamente JWT y UUIDs. Los query params opcionales quedan visibles pero deshabilitados. Habilitarlos en Postman cuando se necesiten. Las solicitudes DELETE son destructivas y deben ejecutarse de forma explicita. Para uploads, completar las variables de ruta de archivo; Postman puede pedir seleccionar el archivo local nuevamente despues de importar.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "const now = new Date();",
+          "const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);",
+          "pm.collectionVariables.set('date_to', now.toISOString().slice(0, 10));",
+          "pm.collectionVariables.set('date_from', weekAgo.toISOString().slice(0, 10));",
+          "pm.collectionVariables.set('timestamp_to', now.toISOString());",
+          "pm.collectionVariables.set('timestamp_from', weekAgo.toISOString());"
+        ]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "postas_api_base_url",
+      "value": "http://localhost:8000",
+      "type": "string"
+    },
+    {
+      "key": "tenant_id",
+      "value": "00000000-0000-0000-0000-000000000001",
+      "type": "string"
+    },
+    {
+      "key": "username",
+      "value": "owner",
+      "type": "string"
+    },
+    {
+      "key": "password",
+      "value": "owner1234",
+      "type": "string"
+    },
+    {
+      "key": "new_password",
+      "value": "Postman1234",
+      "type": "string"
+    },
+    {
+      "key": "reset_email",
+      "value": "owner@example.com",
+      "type": "string"
+    },
+    {
+      "key": "password_reset_token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "jwt_access",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "jwt_refresh",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "user_uuid",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "category_uuid",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "product_uuid",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "supplier_uuid",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "product_supplier_uuid",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "sale_uuid",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "cashbox_uuid",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "document_extraction_uuid",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "image_key",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "page",
+      "value": "1",
+      "type": "string"
+    },
+    {
+      "key": "page_size",
+      "value": "50",
+      "type": "string"
+    },
+    {
+      "key": "search",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "low_stock",
+      "value": "true",
+      "type": "string"
+    },
+    {
+      "key": "is_current",
+      "value": "true",
+      "type": "string"
+    },
+    {
+      "key": "date_from",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "date_to",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "timestamp_from",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "timestamp_to",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "payment_method",
+      "value": "CASH",
+      "type": "string"
+    },
+    {
+      "key": "status_filter",
+      "value": "COMPLETED",
+      "type": "string"
+    },
+    {
+      "key": "min_total",
+      "value": "0",
+      "type": "string"
+    },
+    {
+      "key": "max_total",
+      "value": "99999999",
+      "type": "string"
+    },
+    {
+      "key": "report_limit",
+      "value": "10",
+      "type": "string"
+    },
+    {
+      "key": "audit_action",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "audit_entity",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "notification_email",
+      "value": "notificaciones@example.com",
+      "type": "string"
+    },
+    {
+      "key": "initial_amount",
+      "value": "10000.00",
+      "type": "string"
+    },
+    {
+      "key": "final_amount",
+      "value": "10121.00",
+      "type": "string"
+    },
+    {
+      "key": "product_price",
+      "value": "121.00",
+      "type": "string"
+    },
+    {
+      "key": "product_cost",
+      "value": "80.00",
+      "type": "string"
+    },
+    {
+      "key": "product_stock",
+      "value": "100.000",
+      "type": "string"
+    },
+    {
+      "key": "sale_quantity",
+      "value": "1.000",
+      "type": "string"
+    },
+    {
+      "key": "payment_amount",
+      "value": "121.00",
+      "type": "string"
+    },
+    {
+      "key": "products_import_file_path",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "image_file_path",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "document_image_file_path",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "document_provider",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "image_folder",
+      "value": "images",
+      "type": "string"
+    },
+    {
+      "key": "image_prefix",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "image_page_token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "image_max_keys",
+      "value": "200",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Salud",
+      "description": "Solicitudes del modulo Salud.",
+      "item": [
+        {
+          "name": "Healthcheck",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP esperado (200)', () => pm.expect(pm.response.code).to.be.oneOf([200]));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{postas_api_base_url}}/healthz/",
+              "host": [
+                "{{postas_api_base_url}}"
+              ],
+              "path": [
+                "healthz"
+              ]
+            },
+            "description": "Estado basico del proceso Django."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Autenticacion",
+      "description": "Solicitudes del modulo Autenticacion.",
+      "item": [
+        {
+          "name": "Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP esperado (200)', () => pm.expect(pm.response.code).to.be.oneOf([200]));",
+                  "if (pm.response.code >= 200 && pm.response.code < 300 && pm.response.text()) {",
+                  "  const data = pm.response.json();",
+                  "  const captured = data.access;",
+                  "  if (captured) pm.collectionVariables.set('jwt_access', captured);",
+                  "}",
+                  "if (pm.response.code === 200) {",
+                  "  const data = pm.response.json();",
+                  "  if (data.refresh) pm.collectionVariables.set('jwt_refresh', data.refresh);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{postas_api_base_url}}/api/v1/auth/login/",
+              "host": [
+                "{{postas_api_base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "login"
+              ]
+            },
+            "description": "Autentica un usuario con tenant_id, username y password. Devuelve tokens JWT con claims de tenant_id, role y user_id.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tenant_id\": \"{{tenant_id}}\",\n  \"username\": \"{{username}}\",\n  \"password\": \"{{password}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Solicitar restablecimiento de contraseña",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP esperado (200)', () => pm.expect(pm.response.code).to.be.oneOf([200]));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{postas_api_base_url}}/api/v1/auth/password-reset/",
+              "host": [
+                "{{postas_api_base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "password-reset"
+              ]
+            },
+            "description": "Envía un email con un enlace para restablecer la contraseña.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tenant_id\": \"{{tenant_id}}\",\n  \"email\": \"{{reset_email}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Confirmar restablecimiento de contraseña",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP esperado (200)', () => pm.expect(pm.response.code).to.be.oneOf([200]));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{postas_api_base_url}}/api/v1/auth/password-reset/confirm/",
+              "host": [
+                "{{postas_api_base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "password-reset",
+                "confirm"
+              ]
+            },
+            "description": "Valida el token y establece la nueva contraseña.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"token\": \"{{password_reset_token}}\",\n  \"new_password\": \"{{new_password}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Refrescar token",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP esperado (200)', () => pm.expect(pm.response.code).to.be.oneOf([200]));",
+                  "if (pm.response.code >= 200 && pm.response.code < 300 && pm.response.text()) {",
+                  "  const data = pm.response.json();",
+                  "  const captured = data.access;",
+                  "  if (captured) pm.collectionVariables.set('jwt_access', captured);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{postas_api_base_url}}/api/v1/auth/token/refresh/",
+              "host": [
+                "{{postas_api_base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "token",
+                "refresh"
+              ]
+            },
+            "description": "Obtiene un nuevo access token usando el refresh token.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refresh\": \"{{jwt_refresh}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Usuarios",
+      "description": "Solicitudes del modulo Usuarios.",
+      "item": [
+        {
+          "name": "Listar usuarios",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP esperado (200)', () => pm.expect(pm.response.code).to.be.oneOf([200]));",
+                  "if (pm.response.code === 200 && pm.response.text()) {",
+                  "  const data = pm.response.json();",
+                  "  const captured = ((data.results || data)[0] || {}).uuid;",
+                  "  if (captured) pm.collectionVariables.set('user_uuid', captured);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{postas_api_base_url}}/api/v1/users/",
+              "host": [
+                "{{postas_api_base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "users"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "{{page}}",
+                  "description": "A page number within the paginated result set.",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "GET /api/v1/users/",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt_access}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Crear usuario",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP esperado (201)', () => pm.expect(pm.response.code).to.be.oneOf([201]));",
+                  "if (pm.response.code >= 200 && pm.response.code < 300 && pm.response.text()) {",
+                  "  const data = pm.response.json();",
+                  "  const captured = data.uuid;",
+                  "  if (captured) pm.collectionVariables.set('user_uuid', captured);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{postas_api_base_url}}/api/v1/users/",
+              "host": [
+                "{{postas_api_base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "users"
+              ]
+            },
+            "description": "POST /api/v1/users/",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt_access}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"postman_{{$randomInt}}\",\n  \"email\": \"postman_{{$randomInt}}@example.com\",\n  \"password\": \"{{new_password}}\",\n  \"role\": \"EMPLOYEE\",\n  \"active\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Obtener usuario",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP esperado (200)', () => pm.expect(pm.response.code).to.be.oneOf([200]));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{postas_api_base_url}}/api/v1/users/{{user_uuid}}/",
+              "host": [
+                "{{postas_api_base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "users",
+                "{{user_uuid}}"
+              ]
+            },
+            "description": "GET /api/v1/users/{uuid}/",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt_access}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Actualizar usuario (PUT)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP esperado (200)', () => pm.expect(pm.response.code).to.be.oneOf([200]));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{postas_api_base_url}}/api/v1/users/{{user_uuid}}/",
+              "host": [
+                "{{postas_api_base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "users",
+                "{{user_uuid}}"
+              ]
+            },
+            "description": "PUT /api/v1/users/{uuid}/",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt_access}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"postman_actualizado\",\n  \"email\": \"postman.updated@example.com\",\n  \"password\": \"{{new_password}}\",\n  \"role\": \"EMPLOYEE\",\n  \"active\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Actualizar usuario (PATCH)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP esperado (200)', () => pm.expect(pm.response.code).to.be.oneOf([200]));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{postas_api_base_url}}/api/v1/users/{{user_uuid}}/",
+              "host": [
+                "{{postas_api_base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "users",
+                "{{user_uuid}}"
+              ]
+            },
+            "description": "PATCH /api/v1/users/{uuid}/",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt_access}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"active\": true,\n  \"role\": \"EMPLOYEE\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Eliminar usuario",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP esperado (204)', () => pm.expect(pm.response.code).to.be.oneOf([204]));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{postas_api_base_url}}/api/v1/users/{{user_uuid}}/",
+              "host": [
+                "{{postas_api_base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "users",
+                "{{user_uuid}}"
+              ]
+            },
+            "description": "DESTRUCTIVO. DELETE /api/v1/users/{uuid}/",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt_access}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Configuracion del tenant",
+      "description": "Solicitudes del modulo Configuracion del tenant.",
+      "item": [
+        {
+          "name": "Obtener configuracion del tenant",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP esperado (200)', () => pm.expect(pm.response.code).to.be.oneOf([200]));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{postas_api_base_url}}/api/v1/tenant/config/",
+              "host": [
+                "{{postas_api_base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "tenant",
+                "config"
+              ]
+            },
+            "description": "Devuelve la configuracion del tenant actual. Solo OWNER.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt_access}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Actualizar configuracion del tenant (PUT)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP esperado (200)', () => pm.expect(pm.response.code).to.be.oneOf([200]));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{postas_api_base_url}}/api/v1/tenant/config/",
+              "host": [
+                "{{postas_api_base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "tenant",
+                "config"
+              ]
+            },
+            "description": "Actualiza la configuracion del tenant actual. Solo OWNER.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt_access}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"notification_email\": \"{{notification_email}}\",\n  \"cashbox_email_notifications_enabled\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Actualizar configuracion del tenant (PATCH)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP esperado (200)', () => pm.expect(pm.response.code).to.be.oneOf([200]));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{postas_api_base_url}}/api/v1/tenant/config/",
+              "host": [
+                "{{postas_api_base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "tenant",
+                "config"
+              ]
+            },
+            "description": "Actualiza la configuracion del tenant actual. Solo OWNER.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt_access}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"notification_email\": \"{{notification_email}}\",\n  \"cashbox_email_notifications_enabled\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Billing",
+      "description": "Solicitudes del modulo Billing.",
+      "item": [
+        {
+          "name": "Plan y consumos del tenant actual",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP esperado (200)', () => pm.expect(pm.response.code).to.be.oneOf([200]));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{postas_api_base_url}}/api/v1/billing/current-plan/",
+              "host": [
+                "{{postas_api_base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "billing",
+                "current-plan"
+              ]
+            },
+            "description": "Devuelve el plan actual, estado de suscripcion y consumos/limites de features del tenant autenticado. Es un endpoint solo lectura para el frontend y no modifica datos de billing.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt_access}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Categorias",
+      "description": "Solicitudes del modulo Categorias.",
+      "item": [
+        {
+          "name": "Listar categorias",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP esperado (200)', () => pm.expect(pm.response.code).to.be.oneOf([200]));",
+                  "if (pm.response.code === 200 && pm.response.text()) {",
+                  "  const data = pm.response.json();",
+                  "  const captured = ((data.results || data)[0] || {}).uuid;",
+                  "  if (captured) pm.collectionVariables.set('category_uuid', captured);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{postas_api_base_url}}/api/v1/categories/",
+              "host": [
+                "{{postas_api_base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "categories"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "{{page}}",
+                  "description": "A page number within the paginated result set.",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "GET /api/v1/categories/",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt_access}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Crear categoria",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP esperado (201)', () => pm.expect(pm.response.code).to.be.oneOf([201]));",
+                  "if (pm.response.code >= 200 && pm.response.code < 300 && pm.response.text()) {",
+                  "  const data = pm.response.json();",
+                  "  const captured = data.uuid;",
+                  "  if (captured) pm.collectionVariables.set('category_uuid', captured);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{postas_api_base_url}}/api/v1/categories/",
+              "host": [
+                "{{postas_api_base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "categories"
+              ]
+            },
+            "description": "POST /api/v1/categories/",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt_access}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Categoria Postman {{$randomInt}}\",\n  \"active\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Obtener categoria",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP esperado (200)', () => pm.expect(pm.response.code).to.be.oneOf([200]));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{postas_api_base_url}}/api/v1/categories/{{category_uuid}}/",
+              "host": [
+                "{{postas_api_base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "categories",
+                "{{category_uuid}}"
+              ]
+            },
+            "description": "GET /api/v1/categories/{uuid}/",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt_access}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Actualizar categoria (PUT)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP esperado (200)', () => pm.expect(pm.response.code).to.be.oneOf([200]));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{postas_api_base_url}}/api/v1/categories/{{category_uuid}}/",
+              "host": [
+                "{{postas_api_base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "categories",
+                "{{category_uuid}}"
+              ]
+            },
+            "description": "PUT /api/v1/categories/{uuid}/",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt_access}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Categoria Postman actualizada\",\n  \"active\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Actualizar categoria (PATCH)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP esperado (200)', () => pm.expect(pm.response.code).to.be.oneOf([200]));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{postas_api_base_url}}/api/v1/categories/{{category_uuid}}/",
+              "host": [
+                "{{postas_api_base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "categories",
+                "{{category_uuid}}"
+              ]
+            },
+            "description": "PATCH /api/v1/categories/{uuid}/",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt_access}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Categoria Postman actualizada\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Eliminar categoria",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP esperado (204)', () => pm.expect(pm.response.code).to.be.oneOf([204]));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{postas_api_base_url}}/api/v1/categories/{{category_uuid}}/",
+              "host": [
+                "{{postas_api_base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "categories",
+                "{{category_uuid}}"
+              ]
+            },
+            "description": "DESTRUCTIVO. DELETE /api/v1/categories/{uuid}/",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt_access}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Productos",
+      "description": "Solicitudes del modulo Productos.",
+      "item": [
+        {
+          "name": "Listar productos",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP esperado (200)', () => pm.expect(pm.response.code).to.be.oneOf([200]));",
+                  "if (pm.response.code === 200 && pm.response.text()) {",
+                  "  const data = pm.response.json();",
+                  "  const captured = ((data.results || data)[0] || {}).uuid;",
+                  "  if (captured) pm.collectionVariables.set('product_uuid', captured);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{postas_api_base_url}}/api/v1/products/",
+              "host": [
+                "{{postas_api_base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "products"
+              ],
+              "query": [
+                {
+                  "key": "category",
+                  "value": "{{category_uuid}}",
+                  "description": "",
+                  "disabled": true
+                },
+                {
+                  "key": "page",
+                  "value": "{{page}}",
+                  "description": "A page number within the paginated result set.",
+                  "disabled": true
+                },
+                {
+                  "key": "page_size",
+                  "value": "{{page_size}}",
+                  "description": "Number of results to return per page.",
+                  "disabled": true
+                },
+                {
+                  "key": "category_id",
+                  "value": "{{category_uuid}}",
+                  "description": "",
+                  "disabled": true
+                },
+                {
+                  "key": "low_stock",
+                  "value": "{{low_stock}}",
+                  "description": "",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "GET /api/v1/products/",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt_access}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Crear producto",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP esperado (201)', () => pm.expect(pm.response.code).to.be.oneOf([201]));",
+                  "if (pm.response.code >= 200 && pm.response.code < 300 && pm.response.text()) {",
+                  "  const data = pm.response.json();",
+                  "  const captured = data.uuid;",
+                  "  if (captured) pm.collectionVariables.set('product_uuid', captured);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{postas_api_base_url}}/api/v1/products/",
+              "host": [
+                "{{postas_api_base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "products"
+              ]
+            },
+            "description": "POST /api/v1/products/",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt_access}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Producto Postman {{$randomInt}}\",\n  \"description\": \"Producto creado desde la coleccion\",\n  \"price\": \"{{product_price}}\",\n  \"cost\": \"{{product_cost}}\",\n  \"unit\": \"UNIT\",\n  \"stock\": \"{{product_stock}}\",\n  \"min_stock\": \"5.000\",\n  \"barcode\": \"779{{$randomInt}}\",\n  \"category_id\": \"{{category_uuid}}\",\n  \"active\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Obtener producto",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP esperado (200)', () => pm.expect(pm.response.code).to.be.oneOf([200]));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{postas_api_base_url}}/api/v1/products/{{product_uuid}}/",
+              "host": [
+                "{{postas_api_base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "products",
+                "{{product_uuid}}"
+              ]
+            },
+            "description": "GET /api/v1/products/{uuid}/",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt_access}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Actualizar producto (PUT)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP esperado (200)', () => pm.expect(pm.response.code).to.be.oneOf([200]));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{postas_api_base_url}}/api/v1/products/{{product_uuid}}/",
+              "host": [
+                "{{postas_api_base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "products",
+                "{{product_uuid}}"
+              ]
+            },
+            "description": "PUT /api/v1/products/{uuid}/",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt_access}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Producto Postman actualizado\",\n  \"description\": \"Actualizacion completa\",\n  \"price\": \"{{product_price}}\",\n  \"cost\": \"{{product_cost}}\",\n  \"unit\": \"UNIT\",\n  \"stock\": \"{{product_stock}}\",\n  \"min_stock\": \"5.000\",\n  \"category_id\": \"{{category_uuid}}\",\n  \"active\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Actualizar producto (PATCH)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP esperado (200)', () => pm.expect(pm.response.code).to.be.oneOf([200]));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{postas_api_base_url}}/api/v1/products/{{product_uuid}}/",
+              "host": [
+                "{{postas_api_base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "products",
+                "{{product_uuid}}"
+              ]
+            },
+            "description": "PATCH /api/v1/products/{uuid}/",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt_access}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"price\": \"{{product_price}}\",\n  \"stock\": \"{{product_stock}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Eliminar producto",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP esperado (204)', () => pm.expect(pm.response.code).to.be.oneOf([204]));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{postas_api_base_url}}/api/v1/products/{{product_uuid}}/",
+              "host": [
+                "{{postas_api_base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "products",
+                "{{product_uuid}}"
+              ]
+            },
+            "description": "DESTRUCTIVO. DELETE /api/v1/products/{uuid}/",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt_access}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Exportar productos a CSV",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP esperado (200)', () => pm.expect(pm.response.code).to.be.oneOf([200]));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{postas_api_base_url}}/api/v1/products/export/",
+              "host": [
+                "{{postas_api_base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "products",
+                "export"
+              ]
+            },
+            "description": "Descarga todos los productos activos del tenant como un archivo CSV compatible con el endpoint de importación. Incluye BOM UTF-8 para compatibilidad con Excel.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt_access}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Importar productos",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP esperado (200)', () => pm.expect(pm.response.code).to.be.oneOf([200]));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{postas_api_base_url}}/api/v1/products/import/",
+              "host": [
+                "{{postas_api_base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "products",
+                "import"
+              ]
+            },
+            "description": "Recibe un archivo CSV, XLSX o XLS en multipart/form-data y crea o actualiza productos del tenant. Columnas requeridas: name/nombre y price/precio. Columnas opcionales: description, cost, unit, stock, min_stock, barcode, image_url, category y category_id. Si el barcode o el name coinciden con un producto activo del tenant, se actualiza ese producto y se reporta en matches.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt_access}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": "{{products_import_file_path}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Buscar productos",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP esperado (200)', () => pm.expect(pm.response.code).to.be.oneOf([200]));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{postas_api_base_url}}/api/v1/products/search/",
+              "host": [
+                "{{postas_api_base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "products",
+                "search"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "{{page}}",
+                  "description": "A page number within the paginated result set.",
+                  "disabled": true
+                },
+                {
+                  "key": "q",
+                  "value": "{{search}}",
+                  "description": "Texto a buscar en nombre o barcode",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Busca productos por nombre o codigo de barras. Parametro: ?q=texto",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt_access}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Proveedores",
+      "description": "Solicitudes del modulo Proveedores.",
+      "item": [
+        {
+          "name": "Listar proveedores",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP esperado (200)', () => pm.expect(pm.response.code).to.be.oneOf([200]));",
+                  "if (pm.response.code === 200 && pm.response.text()) {",
+                  "  const data = pm.response.json();",
+                  "  const captured = ((data.results || data)[0] || {}).uuid;",
+                  "  if (captured) pm.collectionVariables.set('supplier_uuid', captured);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{postas_api_base_url}}/api/v1/suppliers/",
+              "host": [
+                "{{postas_api_base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "suppliers"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "{{page}}",
+                  "description": "A page number within the paginated result set.",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "GET /api/v1/suppliers/",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt_access}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Crear proveedor",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP esperado (201)', () => pm.expect(pm.response.code).to.be.oneOf([201]));",
+                  "if (pm.response.code >= 200 && pm.response.code < 300 && pm.response.text()) {",
+                  "  const data = pm.response.json();",
+                  "  const captured = data.uuid;",
+                  "  if (captured) pm.collectionVariables.set('supplier_uuid', captured);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{postas_api_base_url}}/api/v1/suppliers/",
+              "host": [
+                "{{postas_api_base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "suppliers"
+              ]
+            },
+            "description": "POST /api/v1/suppliers/",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt_access}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Proveedor Postman {{$randomInt}}\",\n  \"phone\": \"+5491100000000\",\n  \"email\": \"proveedor_{{$randomInt}}@example.com\",\n  \"address\": \"Direccion de prueba\",\n  \"notes\": \"Creado desde Postman\",\n  \"active\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Obtener proveedor",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP esperado (200)', () => pm.expect(pm.response.code).to.be.oneOf([200]));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{postas_api_base_url}}/api/v1/suppliers/{{supplier_uuid}}/",
+              "host": [
+                "{{postas_api_base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "suppliers",
+                "{{supplier_uuid}}"
+              ]
+            },
+            "description": "GET /api/v1/suppliers/{uuid}/",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt_access}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Actualizar proveedor (PUT)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP esperado (200)', () => pm.expect(pm.response.code).to.be.oneOf([200]));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{postas_api_base_url}}/api/v1/suppliers/{{supplier_uuid}}/",
+              "host": [
+                "{{postas_api_base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "suppliers",
+                "{{supplier_uuid}}"
+              ]
+            },
+            "description": "PUT /api/v1/suppliers/{uuid}/",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt_access}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Proveedor Postman actualizado\",\n  \"phone\": \"+5491100000001\",\n  \"email\": \"proveedor.updated@example.com\",\n  \"address\": \"Direccion actualizada\",\n  \"notes\": \"Actualizacion completa\",\n  \"active\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Actualizar proveedor (PATCH)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP esperado (200)', () => pm.expect(pm.response.code).to.be.oneOf([200]));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{postas_api_base_url}}/api/v1/suppliers/{{supplier_uuid}}/",
+              "host": [
+                "{{postas_api_base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "suppliers",
+                "{{supplier_uuid}}"
+              ]
+            },
+            "description": "PATCH /api/v1/suppliers/{uuid}/",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt_access}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"+5491100000002\",\n  \"notes\": \"Actualizacion parcial\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Eliminar proveedor",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP esperado (204)', () => pm.expect(pm.response.code).to.be.oneOf([204]));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{postas_api_base_url}}/api/v1/suppliers/{{supplier_uuid}}/",
+              "host": [
+                "{{postas_api_base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "suppliers",
+                "{{supplier_uuid}}"
+              ]
+            },
+            "description": "DESTRUCTIVO. DELETE /api/v1/suppliers/{uuid}/",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt_access}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Productos y proveedores",
+      "description": "Solicitudes del modulo Productos y proveedores.",
+      "item": [
+        {
+          "name": "Listar relaciones producto-proveedor",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP esperado (200)', () => pm.expect(pm.response.code).to.be.oneOf([200]));",
+                  "if (pm.response.code === 200 && pm.response.text()) {",
+                  "  const data = pm.response.json();",
+                  "  const captured = ((data.results || data)[0] || {}).uuid;",
+                  "  if (captured) pm.collectionVariables.set('product_supplier_uuid', captured);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{postas_api_base_url}}/api/v1/product-suppliers/",
+              "host": [
+                "{{postas_api_base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "product-suppliers"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "{{page}}",
+                  "description": "A page number within the paginated result set.",
+                  "disabled": true
+                },
+                {
+                  "key": "product",
+                  "value": "{{product_uuid}}",
+                  "description": "",
+                  "disabled": true
+                },
+                {
+                  "key": "supplier",
+                  "value": "{{supplier_uuid}}",
+                  "description": "",
+                  "disabled": true
+                },
+                {
+                  "key": "is_current",
+                  "value": "{{is_current}}",
+                  "description": "",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "GET /api/v1/product-suppliers/",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt_access}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Crear relacion producto-proveedor",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP esperado (201)', () => pm.expect(pm.response.code).to.be.oneOf([201]));",
+                  "if (pm.response.code >= 200 && pm.response.code < 300 && pm.response.text()) {",
+                  "  const data = pm.response.json();",
+                  "  const captured = data.uuid;",
+                  "  if (captured) pm.collectionVariables.set('product_supplier_uuid', captured);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{postas_api_base_url}}/api/v1/product-suppliers/",
+              "host": [
+                "{{postas_api_base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "product-suppliers"
+              ]
+            },
+            "description": "POST /api/v1/product-suppliers/",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt_access}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"product_uuid\": \"{{product_uuid}}\",\n  \"supplier_uuid\": \"{{supplier_uuid}}\",\n  \"price\": \"{{product_cost}}\",\n  \"is_current\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Obtener relacion producto-proveedor",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP esperado (200)', () => pm.expect(pm.response.code).to.be.oneOf([200]));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{postas_api_base_url}}/api/v1/product-suppliers/{{product_supplier_uuid}}/",
+              "host": [
+                "{{postas_api_base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "product-suppliers",
+                "{{product_supplier_uuid}}"
+              ]
+            },
+            "description": "GET /api/v1/product-suppliers/{uuid}/",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt_access}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Actualizar relacion producto-proveedor (PATCH)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP esperado (200)', () => pm.expect(pm.response.code).to.be.oneOf([200]));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{postas_api_base_url}}/api/v1/product-suppliers/{{product_supplier_uuid}}/",
+              "host": [
+                "{{postas_api_base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "product-suppliers",
+                "{{product_supplier_uuid}}"
+              ]
+            },
+            "description": "PATCH /api/v1/product-suppliers/{uuid}/",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt_access}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"price\": \"{{product_cost}}\",\n  \"is_current\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Eliminar relacion producto-proveedor",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP esperado (204)', () => pm.expect(pm.response.code).to.be.oneOf([204]));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{postas_api_base_url}}/api/v1/product-suppliers/{{product_supplier_uuid}}/",
+              "host": [
+                "{{postas_api_base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "product-suppliers",
+                "{{product_supplier_uuid}}"
+              ]
+            },
+            "description": "DESTRUCTIVO. DELETE /api/v1/product-suppliers/{uuid}/",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt_access}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Cambiar proveedor activo de un producto",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP esperado (201)', () => pm.expect(pm.response.code).to.be.oneOf([201]));",
+                  "if (pm.response.code >= 200 && pm.response.code < 300 && pm.response.text()) {",
+                  "  const data = pm.response.json();",
+                  "  const captured = data.uuid;",
+                  "  if (captured) pm.collectionVariables.set('product_supplier_uuid', captured);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{postas_api_base_url}}/api/v1/product-suppliers/switch/",
+              "host": [
+                "{{postas_api_base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "product-suppliers",
+                "switch"
+              ]
+            },
+            "description": "Desactiva todos los proveedores activos del producto y asigna el nuevo.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt_access}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"product_uuid\": \"{{product_uuid}}\",\n  \"supplier_uuid\": \"{{supplier_uuid}}\",\n  \"price\": \"{{product_cost}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Ventas",
+      "description": "Solicitudes del modulo Ventas.",
+      "item": [
+        {
+          "name": "Listar ventas",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP esperado (200)', () => pm.expect(pm.response.code).to.be.oneOf([200]));",
+                  "if (pm.response.code === 200 && pm.response.text()) {",
+                  "  const data = pm.response.json();",
+                  "  const captured = ((data.results || data)[0] || {}).uuid;",
+                  "  if (captured) pm.collectionVariables.set('sale_uuid', captured);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{postas_api_base_url}}/api/v1/sales/",
+              "host": [
+                "{{postas_api_base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "sales"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "{{page}}",
+                  "description": "A page number within the paginated result set.",
+                  "disabled": true
+                },
+                {
+                  "key": "user_id",
+                  "value": "{{user_uuid}}",
+                  "description": "",
+                  "disabled": true
+                },
+                {
+                  "key": "payment_method",
+                  "value": "{{payment_method}}",
+                  "description": "",
+                  "disabled": true
+                },
+                {
+                  "key": "status",
+                  "value": "{{status_filter}}",
+                  "description": "",
+                  "disabled": true
+                },
+                {
+                  "key": "min_total",
+                  "value": "{{min_total}}",
+                  "description": "",
+                  "disabled": true
+                },
+                {
+                  "key": "max_total",
+                  "value": "{{max_total}}",
+                  "description": "",
+                  "disabled": true
+                },
+                {
+                  "key": "from",
+                  "value": "{{date_from}}",
+                  "description": "",
+                  "disabled": true
+                },
+                {
+                  "key": "to",
+                  "value": "{{date_to}}",
+                  "description": "",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "GET /api/v1/sales/",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt_access}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Crear venta",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP esperado (201)', () => pm.expect(pm.response.code).to.be.oneOf([201]));",
+                  "if (pm.response.code >= 200 && pm.response.code < 300 && pm.response.text()) {",
+                  "  const data = pm.response.json();",
+                  "  const captured = data.uuid;",
+                  "  if (captured) pm.collectionVariables.set('sale_uuid', captured);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{postas_api_base_url}}/api/v1/sales/",
+              "host": [
+                "{{postas_api_base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "sales"
+              ]
+            },
+            "description": "POST /api/v1/sales/",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt_access}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"payments\": [\n    {\n      \"method\": \"{{payment_method}}\",\n      \"amount\": \"{{payment_amount}}\"\n    }\n  ],\n  \"items\": [\n    {\n      \"product_id\": \"{{product_uuid}}\",\n      \"quantity\": \"{{sale_quantity}}\"\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Obtener venta",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP esperado (200)', () => pm.expect(pm.response.code).to.be.oneOf([200]));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{postas_api_base_url}}/api/v1/sales/{{sale_uuid}}/",
+              "host": [
+                "{{postas_api_base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "sales",
+                "{{sale_uuid}}"
+              ]
+            },
+            "description": "GET /api/v1/sales/{uuid}/",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt_access}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Cancelar venta",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP esperado (200)', () => pm.expect(pm.response.code).to.be.oneOf([200]));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{postas_api_base_url}}/api/v1/sales/{{sale_uuid}}/cancel/",
+              "host": [
+                "{{postas_api_base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "sales",
+                "{{sale_uuid}}",
+                "cancel"
+              ]
+            },
+            "description": "Cancela una venta y revierte el stock de los productos. Solo ADMIN u OWNER.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt_access}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Cajas",
+      "description": "Solicitudes del modulo Cajas.",
+      "item": [
+        {
+          "name": "Listar cajas",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP esperado (200)', () => pm.expect(pm.response.code).to.be.oneOf([200]));",
+                  "if (pm.response.code === 200 && pm.response.text()) {",
+                  "  const data = pm.response.json();",
+                  "  const captured = ((data.results || data)[0] || {}).uuid;",
+                  "  if (captured) pm.collectionVariables.set('cashbox_uuid', captured);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{postas_api_base_url}}/api/v1/cashboxes/",
+              "host": [
+                "{{postas_api_base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "cashboxes"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "{{page}}",
+                  "description": "A page number within the paginated result set.",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "GET /api/v1/cashboxes/",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt_access}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Obtener caja",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP esperado (200)', () => pm.expect(pm.response.code).to.be.oneOf([200]));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{postas_api_base_url}}/api/v1/cashboxes/{{cashbox_uuid}}/",
+              "host": [
+                "{{postas_api_base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "cashboxes",
+                "{{cashbox_uuid}}"
+              ]
+            },
+            "description": "GET /api/v1/cashboxes/{uuid}/",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt_access}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Enviar email de notificacion de caja",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP esperado (200)', () => pm.expect(pm.response.code).to.be.oneOf([200]));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{postas_api_base_url}}/api/v1/cashboxes/{{cashbox_uuid}}/notify-email/",
+              "host": [
+                "{{postas_api_base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "cashboxes",
+                "{{cashbox_uuid}}",
+                "notify-email"
+              ]
+            },
+            "description": "Envia al OWNER del tenant un email con la informacion de apertura o cierre de una caja, segun el estado actual de la caja.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt_access}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Cerrar caja",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP esperado (200)', () => pm.expect(pm.response.code).to.be.oneOf([200]));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{postas_api_base_url}}/api/v1/cashboxes/close/",
+              "host": [
+                "{{postas_api_base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "cashboxes",
+                "close"
+              ]
+            },
+            "description": "Cierra la caja abierta del tenant. Calcula expected_amount y difference automaticamente.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt_access}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"final_amount\": \"{{final_amount}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Caja actual",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP esperado (200)', () => pm.expect(pm.response.code).to.be.oneOf([200]));",
+                  "if (pm.response.code === 200 && pm.response.text()) {",
+                  "  const data = pm.response.json();",
+                  "  const captured = data.uuid;",
+                  "  if (captured) pm.collectionVariables.set('cashbox_uuid', captured);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{postas_api_base_url}}/api/v1/cashboxes/current/",
+              "host": [
+                "{{postas_api_base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "cashboxes",
+                "current"
+              ]
+            },
+            "description": "Devuelve la caja abierta actualmente para el tenant.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt_access}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Abrir caja",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP esperado (201)', () => pm.expect(pm.response.code).to.be.oneOf([201]));",
+                  "if (pm.response.code >= 200 && pm.response.code < 300 && pm.response.text()) {",
+                  "  const data = pm.response.json();",
+                  "  const captured = data.uuid;",
+                  "  if (captured) pm.collectionVariables.set('cashbox_uuid', captured);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{postas_api_base_url}}/api/v1/cashboxes/open/",
+              "host": [
+                "{{postas_api_base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "cashboxes",
+                "open"
+              ]
+            },
+            "description": "Abre una nueva caja con un monto inicial. Solo se permite una caja abierta por tenant.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt_access}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"initial_amount\": \"{{initial_amount}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Reportes",
+      "description": "Solicitudes del modulo Reportes.",
+      "item": [
+        {
+          "name": "Resumen de caja",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP esperado (200)', () => pm.expect(pm.response.code).to.be.oneOf([200]));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{postas_api_base_url}}/api/v1/reports/cashbox/summary/",
+              "host": [
+                "{{postas_api_base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "reports",
+                "cashbox",
+                "summary"
+              ],
+              "query": [
+                {
+                  "key": "cashbox_id",
+                  "value": "{{cashbox_uuid}}",
+                  "description": "UUID de la caja. Si no se envia, usa la caja abierta.",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Resumen de una caja especifica o la caja abierta actual. Incluye desglose por metodo de pago.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt_access}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Productos mas vendidos",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP esperado (200)', () => pm.expect(pm.response.code).to.be.oneOf([200]));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{postas_api_base_url}}/api/v1/reports/products/top/",
+              "host": [
+                "{{postas_api_base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "reports",
+                "products",
+                "top"
+              ],
+              "query": [
+                {
+                  "key": "from",
+                  "value": "{{date_from}}",
+                  "description": "Fecha desde (YYYY-MM-DD). Por defecto: hoy.",
+                  "disabled": true
+                },
+                {
+                  "key": "limit",
+                  "value": "{{report_limit}}",
+                  "description": "Cantidad maxima de productos (default: 10)",
+                  "disabled": true
+                },
+                {
+                  "key": "to",
+                  "value": "{{date_to}}",
+                  "description": "Fecha hasta (YYYY-MM-DD)",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Top N productos por cantidad vendida. Filtra por rango de fechas y limite.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt_access}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Ventas agrupadas por dia",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP esperado (200)', () => pm.expect(pm.response.code).to.be.oneOf([200]));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{postas_api_base_url}}/api/v1/reports/sales/by-date/",
+              "host": [
+                "{{postas_api_base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "reports",
+                "sales",
+                "by-date"
+              ],
+              "query": [
+                {
+                  "key": "from",
+                  "value": "{{date_from}}",
+                  "description": "Fecha desde (YYYY-MM-DD)",
+                  "disabled": true
+                },
+                {
+                  "key": "to",
+                  "value": "{{date_to}}",
+                  "description": "Fecha hasta (YYYY-MM-DD)",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Retorna totales de ventas por cada dia en el rango especificado. Sin filtros, retorna la semana actual (lunes a domingo).",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt_access}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Ventas por metodo de pago",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP esperado (200)', () => pm.expect(pm.response.code).to.be.oneOf([200]));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{postas_api_base_url}}/api/v1/reports/sales/by-payment/",
+              "host": [
+                "{{postas_api_base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "reports",
+                "sales",
+                "by-payment"
+              ],
+              "query": [
+                {
+                  "key": "from",
+                  "value": "{{date_from}}",
+                  "description": "Fecha desde (YYYY-MM-DD). Por defecto: hoy.",
+                  "disabled": true
+                },
+                {
+                  "key": "to",
+                  "value": "{{date_to}}",
+                  "description": "Fecha hasta (YYYY-MM-DD)",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Desglose de ventas agrupadas por metodo de pago. Filtra por rango de fechas.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt_access}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Reporte de ventas diarias",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP esperado (200)', () => pm.expect(pm.response.code).to.be.oneOf([200]));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{postas_api_base_url}}/api/v1/reports/sales/daily/",
+              "host": [
+                "{{postas_api_base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "reports",
+                "sales",
+                "daily"
+              ],
+              "query": [
+                {
+                  "key": "from",
+                  "value": "{{date_from}}",
+                  "description": "Fecha desde (YYYY-MM-DD). Por defecto: hoy.",
+                  "disabled": true
+                },
+                {
+                  "key": "to",
+                  "value": "{{date_to}}",
+                  "description": "Fecha hasta (YYYY-MM-DD)",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Retorna total vendido, cantidad de ventas y promedio. Filtra por rango de fechas (from/to). Sin fechas, muestra solo hoy.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt_access}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Auditoria",
+      "description": "Solicitudes del modulo Auditoria.",
+      "item": [
+        {
+          "name": "Listar logs de auditoria",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP esperado (200)', () => pm.expect(pm.response.code).to.be.oneOf([200]));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{postas_api_base_url}}/api/v1/audit/",
+              "host": [
+                "{{postas_api_base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "audit"
+              ],
+              "query": [
+                {
+                  "key": "action",
+                  "value": "{{audit_action}}",
+                  "description": "* `CREATE` - Create\n* `UPDATE` - Update\n* `DELETE` - Delete\n* `LOGIN` - Login\n* `SALE` - Sale\n* `CASHBOX` - Cashbox\n* `CASHBOX_EMAIL` - Cashbox email\n* `CASHBOX_EMAIL_SKIP` - Cashbox email skipped\n* `CASHBOX_EMAIL_FAILED` - Cashbox email failed",
+                  "disabled": true
+                },
+                {
+                  "key": "entity",
+                  "value": "{{audit_entity}}",
+                  "description": "* `USER` - User\n* `PRODUCT` - Product\n* `CATEGORY` - Category\n* `SALE` - Sale\n* `CASHBOX` - Cashbox\n* `TENANT_CONFIG` - Tenant config",
+                  "disabled": true
+                },
+                {
+                  "key": "page",
+                  "value": "{{page}}",
+                  "description": "A page number within the paginated result set.",
+                  "disabled": true
+                },
+                {
+                  "key": "timestamp__date",
+                  "value": "{{date_from}}",
+                  "description": "",
+                  "disabled": true
+                },
+                {
+                  "key": "timestamp__gte",
+                  "value": "{{timestamp_from}}",
+                  "description": "",
+                  "disabled": true
+                },
+                {
+                  "key": "timestamp__lte",
+                  "value": "{{timestamp_to}}",
+                  "description": "",
+                  "disabled": true
+                },
+                {
+                  "key": "user",
+                  "value": "{{user_uuid}}",
+                  "description": "",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "GET /api/v1/audit/",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt_access}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Imagenes y almacenamiento",
+      "description": "Solicitudes del modulo Imagenes y almacenamiento.",
+      "item": [
+        {
+          "name": "Verificar almacenamiento",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP esperado (200)', () => pm.expect(pm.response.code).to.be.oneOf([200]));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{postas_api_base_url}}/api/v1/cloud/health/",
+              "host": [
+                "{{postas_api_base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "cloud",
+                "health"
+              ]
+            },
+            "description": "GET /api/v1/cloud/health/   → prueba conectividad con el bucket (upload -> read -> delete)",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt_access}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Listar imagenes privadas",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP esperado (200)', () => pm.expect(pm.response.code).to.be.oneOf([200]));",
+                  "if (pm.response.code === 200 && pm.response.text()) {",
+                  "  const data = pm.response.json();",
+                  "  const captured = ((data.images || [])[0] || {}).key;",
+                  "  if (captured) pm.collectionVariables.set('image_key', captured);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{postas_api_base_url}}/api/v1/cloud/images/",
+              "host": [
+                "{{postas_api_base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "cloud",
+                "images"
+              ],
+              "query": [
+                {
+                  "key": "prefix",
+                  "value": "{{image_prefix}}",
+                  "description": "",
+                  "disabled": true
+                },
+                {
+                  "key": "search",
+                  "value": "{{search}}",
+                  "description": "",
+                  "disabled": true
+                },
+                {
+                  "key": "token",
+                  "value": "{{image_page_token}}",
+                  "description": "",
+                  "disabled": true
+                },
+                {
+                  "key": "max_keys",
+                  "value": "{{image_max_keys}}",
+                  "description": "",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "GET    /api/v1/cloud/images/   → lista imágenes del tenant\nPOST   /api/v1/cloud/images/   → sube una imagen al tenant\nDELETE /api/v1/cloud/images/   → elimina una imagen del tenant",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt_access}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Subir imagen",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP esperado (201)', () => pm.expect(pm.response.code).to.be.oneOf([201]));",
+                  "if (pm.response.code >= 200 && pm.response.code < 300 && pm.response.text()) {",
+                  "  const data = pm.response.json();",
+                  "  const captured = data.key || (data.object && data.object.key);",
+                  "  if (captured) pm.collectionVariables.set('image_key', captured);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{postas_api_base_url}}/api/v1/cloud/images/",
+              "host": [
+                "{{postas_api_base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "cloud",
+                "images"
+              ]
+            },
+            "description": "GET    /api/v1/cloud/images/   → lista imágenes del tenant\nPOST   /api/v1/cloud/images/   → sube una imagen al tenant\nDELETE /api/v1/cloud/images/   → elimina una imagen del tenant",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt_access}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "image",
+                  "type": "file",
+                  "src": "{{image_file_path}}"
+                },
+                {
+                  "key": "folder",
+                  "type": "text",
+                  "value": "{{image_folder}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Eliminar imagen",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP esperado (200)', () => pm.expect(pm.response.code).to.be.oneOf([200]));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{postas_api_base_url}}/api/v1/cloud/images/",
+              "host": [
+                "{{postas_api_base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "cloud",
+                "images"
+              ]
+            },
+            "description": "DESTRUCTIVO. GET    /api/v1/cloud/images/   → lista imágenes del tenant\nPOST   /api/v1/cloud/images/   → sube una imagen al tenant\nDELETE /api/v1/cloud/images/   → elimina una imagen del tenant",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt_access}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"key\": \"{{image_key}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Obtener imagen privada",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP esperado (200)', () => pm.expect(pm.response.code).to.be.oneOf([200]));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{postas_api_base_url}}/api/v1/cloud/images/{{image_key}}/",
+              "host": [
+                "{{postas_api_base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "cloud",
+                "images",
+                "{{image_key}}"
+              ]
+            },
+            "description": "GET   /api/v1/cloud/images/<path:key>/   → obtiene metadata de una imagen del tenant\nPUT   /api/v1/cloud/images/<path:key>/   → reemplaza una imagen del tenant",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt_access}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Reemplazar imagen",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP esperado (200)', () => pm.expect(pm.response.code).to.be.oneOf([200]));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{postas_api_base_url}}/api/v1/cloud/images/{{image_key}}/",
+              "host": [
+                "{{postas_api_base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "cloud",
+                "images",
+                "{{image_key}}"
+              ]
+            },
+            "description": "GET   /api/v1/cloud/images/<path:key>/   → obtiene metadata de una imagen del tenant\nPUT   /api/v1/cloud/images/<path:key>/   → reemplaza una imagen del tenant",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt_access}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "image",
+                  "type": "file",
+                  "src": "{{image_file_path}}"
+                },
+                {
+                  "key": "folder",
+                  "type": "text",
+                  "value": "{{image_folder}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Listar imagenes publicas",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP esperado (200)', () => pm.expect(pm.response.code).to.be.oneOf([200]));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{postas_api_base_url}}/api/v1/cloud/public/images/?tenant_id={{tenant_id}}",
+              "host": [
+                "{{postas_api_base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "cloud",
+                "public",
+                "images"
+              ],
+              "query": [
+                {
+                  "key": "tenant_id",
+                  "value": "{{tenant_id}}",
+                  "description": ""
+                },
+                {
+                  "key": "prefix",
+                  "value": "{{image_prefix}}",
+                  "description": "",
+                  "disabled": true
+                },
+                {
+                  "key": "search",
+                  "value": "{{search}}",
+                  "description": "",
+                  "disabled": true
+                },
+                {
+                  "key": "token",
+                  "value": "{{image_page_token}}",
+                  "description": "",
+                  "disabled": true
+                },
+                {
+                  "key": "max_keys",
+                  "value": "{{image_max_keys}}",
+                  "description": "",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "GET /api/v1/cloud/public/images/?tenant_id=<uuid>            → lista imágenes (sin auth)\nGET /api/v1/cloud/public/images/<path:key>/                  → metadata de una imagen (sin auth)"
+          }
+        },
+        {
+          "name": "Obtener imagen publica",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP esperado (200)', () => pm.expect(pm.response.code).to.be.oneOf([200]));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{postas_api_base_url}}/api/v1/cloud/public/images/{{image_key}}/",
+              "host": [
+                "{{postas_api_base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "cloud",
+                "public",
+                "images",
+                "{{image_key}}"
+              ]
+            },
+            "description": "GET /api/v1/cloud/public/images/?tenant_id=<uuid>            → lista imágenes (sin auth)\nGET /api/v1/cloud/public/images/<path:key>/                  → metadata de una imagen (sin auth)"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Extraccion de documentos",
+      "description": "Solicitudes del modulo Extraccion de documentos.",
+      "item": [
+        {
+          "name": "Listar extracciones",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP esperado (200)', () => pm.expect(pm.response.code).to.be.oneOf([200]));",
+                  "if (pm.response.code === 200 && pm.response.text()) {",
+                  "  const data = pm.response.json();",
+                  "  const captured = ((data.results || data)[0] || {}).uuid;",
+                  "  if (captured) pm.collectionVariables.set('document_extraction_uuid', captured);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{postas_api_base_url}}/api/v1/document-extractions/",
+              "host": [
+                "{{postas_api_base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "document-extractions"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "{{page}}",
+                  "description": "",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "GET /api/v1/document-extractions/",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt_access}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Crear extraccion",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP esperado (201)', () => pm.expect(pm.response.code).to.be.oneOf([201]));",
+                  "if (pm.response.code >= 200 && pm.response.code < 300 && pm.response.text()) {",
+                  "  const data = pm.response.json();",
+                  "  const captured = data.uuid;",
+                  "  if (captured) pm.collectionVariables.set('document_extraction_uuid', captured);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{postas_api_base_url}}/api/v1/document-extractions/",
+              "host": [
+                "{{postas_api_base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "document-extractions"
+              ]
+            },
+            "description": "POST /api/v1/document-extractions/",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt_access}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "image",
+                  "type": "file",
+                  "src": "{{document_image_file_path}}"
+                },
+                {
+                  "key": "provider",
+                  "type": "text",
+                  "value": "{{document_provider}}"
+                },
+                {
+                  "key": "metadata",
+                  "type": "text",
+                  "value": "{\"source\":\"postman\"}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Obtener extraccion",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP esperado (200)', () => pm.expect(pm.response.code).to.be.oneOf([200]));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{postas_api_base_url}}/api/v1/document-extractions/{{document_extraction_uuid}}/",
+              "host": [
+                "{{postas_api_base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "document-extractions",
+                "{{document_extraction_uuid}}"
+              ]
+            },
+            "description": "GET /api/v1/document-extractions/{uuid}/",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt_access}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

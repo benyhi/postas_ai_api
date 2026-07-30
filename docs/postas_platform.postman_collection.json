@@ -1,0 +1,489 @@
+{
+  "info": {
+    "_postman_id": "f9b42bd5-e05f-447a-a37a-0881b00ab7c5",
+    "name": "Postas Platform API - Completa (sin ARCA)",
+    "description": "Coleccion de postas_platform_api agrupada por modulo. Excluye todas las rutas /internal/v1/arca porque estan en la coleccion ARCA dedicada.\n\nLa API legacy de extraccion usa X-Postas-AI-Token y X-Postas-Source. Billing interno usa X-Postas-Service-Token y X-Postas-Source. En produccion, los endpoints internos requieren HTTPS. Para probar billing debe existir el catalogo y una suscripcion del tenant; usar los seeds del repo si la base local esta vacia.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "platform_base_url",
+      "value": "http://localhost:8001",
+      "type": "string"
+    },
+    {
+      "key": "tenant_id",
+      "value": "00000000-0000-0000-0000-000000000001",
+      "type": "string"
+    },
+    {
+      "key": "service_token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "service_source",
+      "value": "postas_api",
+      "type": "string"
+    },
+    {
+      "key": "ai_token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "ai_source",
+      "value": "postas_api",
+      "type": "string"
+    },
+    {
+      "key": "document_extraction_uuid",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "document_file_url",
+      "value": "https://example.com/factura.jpg",
+      "type": "string"
+    },
+    {
+      "key": "ai_provider",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "feature_key",
+      "value": "document_extraction",
+      "type": "string"
+    },
+    {
+      "key": "usage_amount",
+      "value": "1",
+      "type": "string"
+    },
+    {
+      "key": "resource_count",
+      "value": "1",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Salud",
+      "description": "Solicitudes del modulo Salud.",
+      "item": [
+        {
+          "name": "Healthcheck",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP esperado (200)', () => pm.expect(pm.response.code).to.be.oneOf([200]));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{platform_base_url}}/api/v1/health",
+              "host": [
+                "{{platform_base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "health"
+              ]
+            },
+            "description": "GET /api/v1/health"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Extraccion de documentos",
+      "description": "Solicitudes del modulo Extraccion de documentos.",
+      "item": [
+        {
+          "name": "Procesar extraccion documental",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP esperado (200)', () => pm.expect(pm.response.code).to.be.oneOf([200]));",
+                  "if (pm.response.code >= 200 && pm.response.code < 300 && pm.response.text()) {",
+                  "  const data = pm.response.json();",
+                  "  const captured = data.uuid;",
+                  "  if (captured) pm.collectionVariables.set('document_extraction_uuid', captured);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-Postas-AI-Token",
+                "value": "{{ai_token}}",
+                "type": "text"
+              },
+              {
+                "key": "X-Postas-Source",
+                "value": "{{ai_source}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{platform_base_url}}/api/v1/document-extractions/process",
+              "host": [
+                "{{platform_base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "document-extractions",
+                "process"
+              ]
+            },
+            "description": "POST /api/v1/document-extractions/process",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"uuid\": \"{{$guid}}\",\n  \"tenant_id\": \"{{tenant_id}}\",\n  \"file_url\": \"{{document_file_url}}\",\n  \"status\": \"pending\",\n  \"provider\": \"{{ai_provider}}\",\n  \"metadata\": {\n    \"source\": \"postman\"\n  },\n  \"source_request_id\": \"postman-{{$guid}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Extraer datos de factura (alias)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP esperado (200)', () => pm.expect(pm.response.code).to.be.oneOf([200]));",
+                  "if (pm.response.code >= 200 && pm.response.code < 300 && pm.response.text()) {",
+                  "  const data = pm.response.json();",
+                  "  const captured = data.uuid;",
+                  "  if (captured) pm.collectionVariables.set('document_extraction_uuid', captured);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-Postas-AI-Token",
+                "value": "{{ai_token}}",
+                "type": "text"
+              },
+              {
+                "key": "X-Postas-Source",
+                "value": "{{ai_source}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{platform_base_url}}/api/v1/invoices/extract",
+              "host": [
+                "{{platform_base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "invoices",
+                "extract"
+              ]
+            },
+            "description": "POST /api/v1/invoices/extract",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"uuid\": \"{{$guid}}\",\n  \"tenant_id\": \"{{tenant_id}}\",\n  \"file_url\": \"{{document_file_url}}\",\n  \"status\": \"pending\",\n  \"provider\": \"{{ai_provider}}\",\n  \"metadata\": {\n    \"source\": \"postman\",\n    \"alias\": \"invoices/extract\"\n  },\n  \"source_request_id\": \"postman-{{$guid}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Billing interno",
+      "description": "Solicitudes del modulo Billing interno.",
+      "item": [
+        {
+          "name": "Obtener estado y plan del tenant",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP esperado (200)', () => pm.expect(pm.response.code).to.be.oneOf([200]));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-Postas-Service-Token",
+                "value": "{{service_token}}",
+                "type": "text"
+              },
+              {
+                "key": "X-Postas-Source",
+                "value": "{{service_source}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{platform_base_url}}/internal/v1/tenants/{{tenant_id}}/status",
+              "host": [
+                "{{platform_base_url}}"
+              ],
+              "path": [
+                "internal",
+                "v1",
+                "tenants",
+                "{{tenant_id}}",
+                "status"
+              ]
+            },
+            "description": "GET /internal/v1/tenants/{tenant_id}/status"
+          }
+        },
+        {
+          "name": "Comprobar entitlement",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP esperado (200)', () => pm.expect(pm.response.code).to.be.oneOf([200]));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-Postas-Service-Token",
+                "value": "{{service_token}}",
+                "type": "text"
+              },
+              {
+                "key": "X-Postas-Source",
+                "value": "{{service_source}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{platform_base_url}}/internal/v1/entitlements/check",
+              "host": [
+                "{{platform_base_url}}"
+              ],
+              "path": [
+                "internal",
+                "v1",
+                "entitlements",
+                "check"
+              ]
+            },
+            "description": "POST /internal/v1/entitlements/check",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tenant_id\": \"{{tenant_id}}\",\n  \"feature_key\": \"{{feature_key}}\",\n  \"amount\": \"{{usage_amount}}\",\n  \"resource_count\": \"{{resource_count}}\",\n  \"context\": {\n    \"source\": \"postman\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Registrar consumo",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP esperado (200)', () => pm.expect(pm.response.code).to.be.oneOf([200]));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-Postas-Service-Token",
+                "value": "{{service_token}}",
+                "type": "text"
+              },
+              {
+                "key": "X-Postas-Source",
+                "value": "{{service_source}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{platform_base_url}}/internal/v1/usage/consume",
+              "host": [
+                "{{platform_base_url}}"
+              ],
+              "path": [
+                "internal",
+                "v1",
+                "usage",
+                "consume"
+              ]
+            },
+            "description": "POST /internal/v1/usage/consume",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tenant_id\": \"{{tenant_id}}\",\n  \"feature_key\": \"{{feature_key}}\",\n  \"amount\": \"{{usage_amount}}\",\n  \"source\": \"postman\",\n  \"external_id\": \"postman-{{$guid}}\",\n  \"idempotency_key\": \"postman-usage-{{$guid}}\",\n  \"metadata\": {\n    \"source\": \"postman\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Comprobar y registrar consumo",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP esperado (200)', () => pm.expect(pm.response.code).to.be.oneOf([200]));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-Postas-Service-Token",
+                "value": "{{service_token}}",
+                "type": "text"
+              },
+              {
+                "key": "X-Postas-Source",
+                "value": "{{service_source}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{platform_base_url}}/internal/v1/usage/check-and-consume",
+              "host": [
+                "{{platform_base_url}}"
+              ],
+              "path": [
+                "internal",
+                "v1",
+                "usage",
+                "check-and-consume"
+              ]
+            },
+            "description": "POST /internal/v1/usage/check-and-consume",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tenant_id\": \"{{tenant_id}}\",\n  \"feature_key\": \"{{feature_key}}\",\n  \"amount\": \"{{usage_amount}}\",\n  \"source\": \"postman\",\n  \"external_id\": \"postman-{{$guid}}\",\n  \"idempotency_key\": \"postman-check-consume-{{$guid}}\",\n  \"resource_count\": \"{{resource_count}}\",\n  \"metadata\": {\n    \"source\": \"postman\"\n  },\n  \"context\": {\n    \"source\": \"postman\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
