@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "6fd60269-9504-4ba4-a9a0-c32c8069fbb9",
     "name": "Postas API - Completa (sin ARCA)",
-    "description": "Coleccion completa de postas_api agrupada por modulo. ARCA se excluye porque vive en la coleccion dedicada postas_arca.postman_collection.json.\n\nFlujo sugerido: Login -> crear categoria -> crear producto -> abrir caja -> crear venta. Los tests guardan automaticamente JWT y UUIDs. Los query params opcionales quedan visibles pero deshabilitados. Habilitarlos en Postman cuando se necesiten. Las solicitudes DELETE son destructivas y deben ejecutarse de forma explicita. Para uploads, completar las variables de ruta de archivo; Postman puede pedir seleccionar el archivo local nuevamente despues de importar.",
+    "description": "Coleccion completa de postas_api agrupada por modulo. ARCA se excluye porque vive en la coleccion dedicada postas_arca.postman_collection.json.\n\nFlujo sugerido: Login -> crear categoria -> crear producto -> crear terminal -> abrir caja -> crear venta. Los tests guardan automaticamente JWT y UUIDs. Los query params opcionales quedan visibles pero deshabilitados. Habilitarlos en Postman cuando se necesiten. Las solicitudes DELETE son destructivas y deben ejecutarse de forma explicita. Para uploads, completar las variables de ruta de archivo; Postman puede pedir seleccionar el archivo local nuevamente despues de importar.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "event": [
@@ -99,6 +99,11 @@
     },
     {
       "key": "cashbox_uuid",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "cash_register_uuid",
       "value": "",
       "type": "string"
     },
@@ -200,6 +205,11 @@
     {
       "key": "initial_amount",
       "value": "10000.00",
+      "type": "string"
+    },
+    {
+      "key": "cash_register_name",
+      "value": "Terminal Postman",
       "type": "string"
     },
     {
@@ -2978,6 +2988,129 @@
       ]
     },
     {
+      "name": "Terminales de caja",
+      "description": "Gestion de terminales fisicas. Lectura autenticada; escritura ADMIN/OWNER; sin borrado fisico.",
+      "item": [
+        {
+          "name": "Crear terminal",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Terminal creada', () => pm.expect(pm.response.code).to.eql(201));",
+                  "if (pm.response.code === 201) pm.collectionVariables.set('cash_register_uuid', pm.response.json().uuid);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Accept", "value": "application/json", "type": "text"},
+              {"key": "Content-Type", "value": "application/json", "type": "text"}
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"{{cash_register_name}}\"\n}",
+              "options": {"raw": {"language": "json"}}
+            },
+            "url": {
+              "raw": "{{postas_api_base_url}}/api/v1/cash-registers/",
+              "host": ["{{postas_api_base_url}}"],
+              "path": ["api", "v1", "cash-registers"]
+            },
+            "description": "Crea una terminal activa. Solo ADMIN/OWNER.",
+            "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{jwt_access}}", "type": "string"}]}
+          }
+        },
+        {
+          "name": "Listar terminales activas",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Terminales listadas', () => pm.expect(pm.response.code).to.eql(200));",
+                  "if (pm.response.code === 200) { const data = pm.response.json(); const row = (data.results || data)[0]; if (row) pm.collectionVariables.set('cash_register_uuid', row.uuid); }"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Accept", "value": "application/json", "type": "text"}],
+            "url": {
+              "raw": "{{postas_api_base_url}}/api/v1/cash-registers/",
+              "host": ["{{postas_api_base_url}}"],
+              "path": ["api", "v1", "cash-registers"]
+            },
+            "description": "Lista solo terminales activas del tenant autenticado.",
+            "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{jwt_access}}", "type": "string"}]}
+          }
+        },
+        {
+          "name": "Obtener terminal",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Accept", "value": "application/json", "type": "text"}],
+            "url": {
+              "raw": "{{postas_api_base_url}}/api/v1/cash-registers/{{cash_register_uuid}}/",
+              "host": ["{{postas_api_base_url}}"],
+              "path": ["api", "v1", "cash-registers", "{{cash_register_uuid}}"]
+            },
+            "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{jwt_access}}", "type": "string"}]}
+          }
+        },
+        {
+          "name": "Renombrar terminal",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {"key": "Accept", "value": "application/json", "type": "text"},
+              {"key": "Content-Type", "value": "application/json", "type": "text"}
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"{{cash_register_name}} renombrada\"\n}",
+              "options": {"raw": {"language": "json"}}
+            },
+            "url": {
+              "raw": "{{postas_api_base_url}}/api/v1/cash-registers/{{cash_register_uuid}}/",
+              "host": ["{{postas_api_base_url}}"],
+              "path": ["api", "v1", "cash-registers", "{{cash_register_uuid}}"]
+            },
+            "description": "Renombra la terminal. Solo ADMIN/OWNER.",
+            "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{jwt_access}}", "type": "string"}]}
+          }
+        },
+        {
+          "name": "Desactivar terminal",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {"key": "Accept", "value": "application/json", "type": "text"},
+              {"key": "Content-Type", "value": "application/json", "type": "text"}
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"active\": false\n}",
+              "options": {"raw": {"language": "json"}}
+            },
+            "url": {
+              "raw": "{{postas_api_base_url}}/api/v1/cash-registers/{{cash_register_uuid}}/",
+              "host": ["{{postas_api_base_url}}"],
+              "path": ["api", "v1", "cash-registers", "{{cash_register_uuid}}"]
+            },
+            "description": "Desactiva una terminal sin sesion abierta. No existe DELETE.",
+            "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{jwt_access}}", "type": "string"}]}
+          }
+        }
+      ]
+    },
+    {
       "name": "Cajas",
       "description": "Solicitudes del modulo Cajas.",
       "item": [
@@ -3174,7 +3307,7 @@
                 "close"
               ]
             },
-            "description": "Cierra la caja abierta del tenant. Calcula expected_amount y difference automaticamente.",
+            "description": "Cierra la sesion del usuario autenticado. ADMIN/OWNER pueden agregar cashbox_id al body para un cierre administrativo.",
             "auth": {
               "type": "bearer",
               "bearer": [
@@ -3235,7 +3368,7 @@
                 "current"
               ]
             },
-            "description": "Devuelve la caja abierta actualmente para el tenant.",
+            "description": "Devuelve la sesion abierta del usuario autenticado.",
             "auth": {
               "type": "bearer",
               "bearer": [
@@ -3292,7 +3425,7 @@
                 "open"
               ]
             },
-            "description": "Abre una nueva caja con un monto inicial. Solo se permite una caja abierta por tenant.",
+            "description": "Abre una sesion en una terminal activa. El usuario y la terminal no pueden tener otra sesion abierta.",
             "auth": {
               "type": "bearer",
               "bearer": [
@@ -3305,7 +3438,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"initial_amount\": \"{{initial_amount}}\"\n}",
+              "raw": "{\n  \"register_id\": \"{{cash_register_uuid}}\",\n  \"initial_amount\": \"{{initial_amount}}\"\n}",
               "options": {
                 "raw": {
                   "language": "json"

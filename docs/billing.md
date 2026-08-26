@@ -29,6 +29,24 @@ python scripts/seed_billing.py
 El seed actualiza planes, features y configuraciones `PlanFeature` existentes
 sin duplicar registros.
 
+La feature existente `cashboxes` representa la cantidad maxima de cajas que
+pueden permanecer abiertas simultaneamente. Para validar el limite, el cliente
+debe enviar en `resource_count` la cantidad proyectada de cajas abiertas.
+
+| Plan | Maximo de cajas abiertas simultaneamente |
+| --- | ---: |
+| `free` | 1 |
+| `starter` | 3 |
+| `business` | 5 |
+| `business_ai` | Sin limite |
+| `custom` | Sin limite |
+| `test` | 1 |
+
+El despliegue debe ejecutar `python scripts/seed_billing.py` antes de habilitar
+la apertura multi-terminal en Postas. El cierre de sesiones existentes no
+consulta este entitlement: un downgrade puede impedir nuevas aperturas, pero no
+debe impedir el cierre operativo.
+
 El catalogo incluye un plan privado `test`. Ese plan habilita todas las
 features y configura limite `1` para las features de tipo `monthly_usage` y
 `resource_limit`, para probar permisos y limites rapidamente.

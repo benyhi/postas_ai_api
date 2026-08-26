@@ -96,6 +96,34 @@ def test_seed_creates_plans_and_features_without_duplicates(db_session: Session)
     assert second_plan_count == first_plan_count
 
 
+@pytest.mark.parametrize(
+    ("plan_code", "expected_limit"),
+    [
+        ("free", 1),
+        ("starter", 3),
+        ("business", 5),
+        ("business_ai", None),
+        ("custom", None),
+        ("test", 1),
+    ],
+)
+def test_seed_configures_simultaneous_open_cashbox_limits(
+    db_session: Session,
+    plan_code: str,
+    expected_limit: int | None,
+) -> None:
+    plan = db_session.scalar(select(Plan).where(Plan.code == plan_code))
+    assert plan is not None
+
+    plan_features = {plan_feature.feature.key: plan_feature for plan_feature in plan.features}
+    cashboxes = plan_features["cashboxes"]
+
+    assert cashboxes.enabled is True
+    assert cashboxes.limit_value == expected_limit
+    assert cashboxes.reset_period is None
+    assert cashboxes.feature.description == "Cantidad maxima de cajas abiertas simultaneamente."
+
+
 def test_seed_creates_test_plan_with_one_unit_limits(db_session: Session) -> None:
     plan = db_session.scalar(select(Plan).where(Plan.code == "test"))
     assert plan is not None
@@ -409,6 +437,103 @@ def test_resource_limit_denies_when_resource_count_exceeds_limit(db_session: Ses
     assert response.remaining == 0
 
 
+@pytest.mark.parametrize(
+    ("plan_code", "limit"),
+    [
+        ("free", 1),
+        ("starter", 3),
+        ("business", 5),
+        ("test", 1),
+    ],
+)
+def test_cashbox_entitlement_allows_limit_and_denies_projected_count_above_it(
+    db_session: Session,
+    plan_code: str,
+    limit: int,
+) -> None:
+    tenant_id = uuid4()
+    create_subscription(db_session, tenant_id, plan_code)
+    service = BillingService(db_session)
+
+    allowed = service.check_entitlement(
+        EntitlementCheckRequest(
+            tenant_id=tenant_id,
+            feature_key="cashboxes",
+            resource_count=limit,
+        )
+    )
+    denied = service.check_entitlement(
+        EntitlementCheckRequest(
+            tenant_id=tenant_id,
+            feature_key="cashboxes",
+            resource_count=limit + 1,
+        )
+    )
+
+    assert allowed.allowed is True
+    assert allowed.limit == limit
+    assert allowed.used == limit
+    assert allowed.remaining == 0
+    assert denied.allowed is False
+    assert denied.reason == "resource_limit_exceeded"
+    assert denied.limit == limit
+    assert denied.used == limit + 1
+    assert denied.remaining == 0
+
+
+@pytest.mark.parametrize("plan_code", ["business_ai", "custom"])
+def test_cashbox_entitlement_is_unlimited_for_unlimited_plans(
+    db_session: Session,
+    plan_code: str,
+) -> None:
+    tenant_id = uuid4()
+    create_subscription(db_session, tenant_id, plan_code)
+
+    response = BillingService(db_session).check_entitlement(
+        EntitlementCheckRequest(
+            tenant_id=tenant_id,
+            feature_key="cashboxes",
+            resource_count=10_000,
+        )
+    )
+
+    assert response.allowed is True
+    assert response.limit is None
+    assert response.used == 10_000
+    assert response.remaining is None
+
+
+def test_cashbox_entitlement_endpoint_accepts_projected_open_count(
+    client: TestClient,
+    db_session: Session,
+) -> None:
+    tenant_id = uuid4()
+    create_subscription(db_session, tenant_id, "starter")
+
+    response = client.post(
+        "/internal/v1/entitlements/check",
+        headers=auth_headers("postas_api"),
+        json={
+            "tenant_id": str(tenant_id),
+            "feature_key": "cashboxes",
+            "resource_count": 4,
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "allowed": False,
+        "reason": "resource_limit_exceeded",
+        "message": "Limite de recursos alcanzado para esta funcionalidad.",
+        "feature_key": "cashboxes",
+        "subscription_status": "active",
+        "limit": 3,
+        "used": 4,
+        "remaining": 0,
+        "upgrade_required": True,
+    }
+
+
 def test_internal_security_rejects_requests_without_valid_token(client: TestClient) -> None:
     response = client.post(
         "/internal/v1/entitlements/check",
@@ -423,7 +548,12 @@ def test_internal_security_rejects_requests_without_valid_token(client: TestClie
     assert response.status_code == 403
 
 
-def test_internal_security_requires_tls(db_session: Session) -> None:
+def test_internal_security_requires_tls(
+    db_session: Session,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("POSTAS_INTERNAL_REQUIRE_TLS", "true")
+    get_settings.cache_clear()
     insecure_client = TestClient(app, base_url="http://testserver")
     response = insecure_client.get(
         f"/internal/v1/tenants/{uuid4()}/status",

@@ -1,0 +1,27 @@
+Feature:
+Limites de cajas abiertas simultaneamente
+
+Summary:
+La feature existente cashboxes ahora expresa el maximo de cajas que pueden permanecer abiertas al mismo tiempo y define limites por plan, sin cambios de schema ni migraciones. Las pruebas cubren el catalogo y el enforcement de planes limitados e ilimitados.
+
+Files changed:
+- app/billing/seed.py
+- tests/test_billing.py
+- docs/billing.md
+- docs/cashbox_limits.txt
+
+Tests created or updated:
+- tests/test_billing.py
+
+Documentation updated:
+- docs/billing.md
+
+Checks run:
+- pytest tests/test_billing.py -k seed: passed (9 passed)
+- pytest tests/test_billing.py -k simultaneous_open_cashbox_limits: passed (6 passed)
+- POSTAS_INTERNAL_REQUIRE_TLS=true pytest tests/test_billing.py: passed (36 passed)
+- python -m py_compile app/billing/seed.py tests/test_billing.py: passed
+
+Important notes:
+- None representa un limite ilimitado para business_ai y custom.
+- El despliegue debe ejecutar scripts/seed_billing.py antes de habilitar la apertura multi-terminal.

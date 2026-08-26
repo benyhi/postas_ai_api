@@ -77,6 +77,10 @@ El plan `test` queda incluido en ese seed. Es privado y habilita todas las
 features; las features de consumo mensual o limite de recursos quedan con
 limite `1`.
 
+La feature `cashboxes` limita sesiones de caja abiertas simultaneamente por
+tenant: Free `1`, Starter `3`, Business `5`, Business + IA y Custom sin limite,
+y Test `1`. Ejecutar este seed antes de desplegar la apertura multi-terminal.
+
 Para crear tenants locales de prueba, uno por cada plan activo, ejecutar:
 
 ```bash
