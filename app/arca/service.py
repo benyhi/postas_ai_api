@@ -9,7 +9,7 @@ from decimal import Decimal, ROUND_HALF_UP
 from typing import Any, Callable
 from uuid import UUID
 
-from sqlalchemy import select, text
+from sqlalchemy import func, select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
 
@@ -27,9 +27,13 @@ from app.arca.schemas import (
     FiscalProfileWrite,
     InvoiceCreateRequest,
     InvoiceError,
+    InvoiceListResponse,
     InvoiceResponse,
     LastVoucherResponse,
     ProfileValidationResponse,
+    SalesPointDiscoveryRequest,
+    SalesPointListResponse,
+    SalesPointResponse,
 )
 from app.billing.schemas import EntitlementCheckRequest
 from app.billing.service import BillingService
@@ -257,6 +261,42 @@ class FiscalProfileService:
         self.db.commit()
         return ProfileValidationResponse(valid=True, status="valid")
 
+    def discover_sales_points(
+        self, tenant_id: UUID, payload: SalesPointDiscoveryRequest
+    ) -> SalesPointListResponse:
+        self.require_entitlement(tenant_id)
+        try:
+            validate_credential_material(payload.certificate, payload.private_key, payload.arca_cuit)
+            client = self.client_factory(
+                ArcaClientOptions(
+                    cuit=payload.arca_cuit,
+                    environment=payload.arca_environment,
+                    credentials=DecryptedCredentials(
+                        certificate=payload.certificate,
+                        private_key=payload.private_key,
+                        access_token=payload.access_token,
+                    ),
+                    timeout_seconds=self.settings.arca_timeout_seconds,
+                    production_calls_enabled=self.settings.arca_production_calls_enabled,
+                )
+            )
+            raw = client.ElectronicBilling.getSalesPoints()
+        except CredentialValidationError as exc:
+            raise ArcaDomainError("invalid_credentials", str(exc), status_code=422) from exc
+        except ArcaDomainError:
+            raise
+        except Exception as exc:
+            if "produccion estan deshabilitadas" in _sanitize(str(exc)).lower():
+                raise ArcaDomainError(
+                    "arca_production_disabled",
+                    "Las llamadas ARCA de produccion estan deshabilitadas en esta instancia.",
+                    status_code=503,
+                ) from exc
+            error = _classify_error(exc)
+            status_code = 504 if error.code == "arca_timeout" else 503 if error.retryable else 422
+            raise ArcaDomainError(error.code, error.message, status_code=status_code) from exc
+        return SalesPointListResponse(results=_normalize_sales_points(raw))
+
     def rotate_all_to_active_key(self) -> int:
         profiles = list(self.db.scalars(select(ArcaFiscalProfile).with_for_update()).all())
         rotated = 0
@@ -306,7 +346,6 @@ class InvoiceService:
                 return self._resume_receiver_identification(
                     existing,
                     payload,
-                    request_hash=request_hash,
                     voucher_number=voucher_number,
                 )
             if existing.request_hash != request_hash:
@@ -317,7 +356,14 @@ class InvoiceService:
                 )
             return self.to_response(existing)
 
-        if automatic and profile.concept != 1:
+        if payload.sale_id is not None and self._find_sale(tenant_id, payload.sale_id) is not None:
+            raise ArcaDomainError(
+                "sale_already_invoiced",
+                "La venta ya posee una solicitud fiscal.",
+                status_code=409,
+            )
+
+        if (automatic or payload.sale_id is not None) and profile.concept != 1:
             raise ArcaDomainError(
                 "automatic_invoicing_requires_products_concept",
                 "La facturacion automatica de ventas requiere concepto Productos.",
@@ -405,6 +451,12 @@ class InvoiceService:
                         status_code=409,
                     ) from exc
                 return self.to_response(existing)
+            if payload.sale_id is not None and self._find_sale(tenant_id, payload.sale_id) is not None:
+                raise ArcaDomainError(
+                    "sale_already_invoiced",
+                    "La venta ya posee una solicitud fiscal.",
+                    status_code=409,
+                ) from exc
             raise ArcaDomainError(
                 "fiscal_reference_conflict",
                 "La referencia fiscal ya esta reservada por otra solicitud.",
@@ -417,20 +469,11 @@ class InvoiceService:
         record: ArcaInvoice,
         payload: InvoiceCreateRequest,
         *,
-        request_hash: str,
         voucher_number: int | None,
     ) -> InvoiceResponse:
         original = record.request_payload
         candidate = payload.model_dump(mode="json")
-        immutable_fields = (
-            "external_id",
-            "sale_id",
-            "invoice_date",
-            "service_start_date",
-            "service_end_date",
-            "payment_due_date",
-            "items",
-        )
+        immutable_fields = ("external_id", "sale_id")
         if any(original.get(field) != candidate.get(field) for field in immutable_fields):
             raise ArcaDomainError(
                 "idempotency_conflict",
@@ -445,8 +488,15 @@ class InvoiceService:
                 "La solicitud debe completarse mediante emision explicita.",
                 status_code=409,
             )
-        record.request_hash = request_hash
-        record.request_payload = candidate
+        resumed_payload = InvoiceCreateRequest.model_validate(
+            {**original, "receiver": payload.receiver.model_dump(mode="json")}
+        )
+        record.request_hash = self._request_hash(
+            record.environment,
+            resumed_payload,
+            voucher_number,
+        )
+        record.request_payload = resumed_payload.model_dump(mode="json")
         record.doc_type = payload.receiver.doc_type
         record.doc_number = payload.receiver.doc_number
         record.receiver_iva_condition_id = payload.receiver.iva_condition_id
@@ -482,6 +532,24 @@ class InvoiceService:
         if record is None:
             raise ArcaDomainError("invoice_not_found", "No se encontro la factura de la venta.", status_code=404)
         return self.to_response(record)
+
+    def list_invoices(self, tenant_id: UUID, *, offset: int, limit: int) -> InvoiceListResponse:
+        tenant = str(tenant_id)
+        count = self.db.scalar(
+            select(func.count()).select_from(ArcaInvoice).where(ArcaInvoice.tenant_id == tenant)
+        ) or 0
+        records = self.db.scalars(
+            select(ArcaInvoice)
+            .options(selectinload(ArcaInvoice.items))
+            .where(ArcaInvoice.tenant_id == tenant)
+            .order_by(ArcaInvoice.created_at.desc(), ArcaInvoice.id.desc())
+            .offset(offset)
+            .limit(limit)
+        ).all()
+        return InvoiceListResponse(
+            count=count,
+            results=[self.to_response(record) for record in records],
+        )
 
     def get_by_fiscal_reference(
         self, tenant_id: UUID, environment: str, point_of_sale: int, voucher_type: int, voucher_number: int
@@ -728,6 +796,16 @@ class InvoiceService:
             .where(ArcaInvoice.tenant_id == str(tenant_id), ArcaInvoice.external_id == external_id)
         )
 
+    def _find_sale(self, tenant_id: UUID, sale_id: UUID) -> ArcaInvoice | None:
+        return self.db.scalar(
+            select(ArcaInvoice)
+            .options(selectinload(ArcaInvoice.items))
+            .where(
+                ArcaInvoice.tenant_id == str(tenant_id),
+                ArcaInvoice.sale_id == str(sale_id),
+            )
+        )
+
     @staticmethod
     def _normalize_response(raw: dict[str, Any]) -> dict[str, Any]:
         cae = _find_first(raw, {"CAE", "Cae", "CodAutorizacion"})
@@ -845,3 +923,51 @@ def _parse_arca_date(value: Any) -> date | None:
         return datetime.strptime(digits, "%Y%m%d").date()
     except ValueError:
         return None
+
+
+def _normalize_sales_points(raw: Any) -> list[SalesPointResponse]:
+    candidates: list[dict[str, Any]] = []
+
+    def collect(node: Any) -> None:
+        if isinstance(node, dict):
+            if any(key in node for key in ("Nro", "Numero", "number")):
+                candidates.append(node)
+            else:
+                for value in node.values():
+                    collect(value)
+        elif isinstance(node, (list, tuple)):
+            for value in node:
+                collect(value)
+
+    collect(raw)
+    results: list[SalesPointResponse] = []
+    for candidate in candidates:
+        number = candidate.get("Nro", candidate.get("Numero", candidate.get("number")))
+        emission = candidate.get(
+            "EmisionTipo", candidate.get("TipoEmision", candidate.get("emission_type", ""))
+        )
+        blocked_raw = candidate.get("Bloqueado", candidate.get("blocked", False))
+        blocked = blocked_raw is True or str(blocked_raw).strip().upper() in {
+            "S",
+            "SI",
+            "TRUE",
+            "1",
+        }
+        deactivation = _parse_arca_date(
+            candidate.get("FchBaja", candidate.get("FechaBaja", candidate.get("deactivation_date")))
+        )
+        try:
+            parsed_number = int(number)
+        except (TypeError, ValueError):
+            continue
+        if parsed_number <= 0 or blocked or deactivation is not None:
+            continue
+        results.append(
+            SalesPointResponse(
+                number=parsed_number,
+                emission_type=str(emission or ""),
+                blocked=False,
+                deactivation_date=None,
+            )
+        )
+    return sorted(results, key=lambda point: point.number)

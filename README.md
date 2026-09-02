@@ -101,6 +101,16 @@ Los perfiles fiscales y las facturas viven bajo
 `/internal/v1/arca/tenants/{tenant_id}`. Todas las llamadas requieren HTTPS,
 `X-Postas-Source: postas_api` y `X-Postas-Service-Token`.
 
+Contratos internos agregados para la API publica de Postas:
+
+- `POST /sales-points`: valida entitlement y credenciales en memoria, consulta `getSalesPoints()` y devuelve solo puntos habilitados. No persiste ni devuelve secretos.
+- `GET /invoices?offset=0&limit=20`: lista facturas ordenadas por `created_at DESC, id DESC`, estrictamente filtradas por tenant (`limit` maximo 100).
+
+Las facturas vinculadas a una venta conservan `sale_id` como relacion canonica.
+Las restricciones unicas `(tenant_id, sale_id)` y `(tenant_id, external_id)`
+impiden emitir dos solicitudes distintas para la misma venta; los payloads con
+`sale_id` requieren un perfil fiscal con concepto Productos.
+
 El worker fiscal es un proceso separado:
 
 ```bash

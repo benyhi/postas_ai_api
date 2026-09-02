@@ -12,10 +12,13 @@ from app.arca.schemas import (
     FiscalProfileResponse,
     FiscalProfileWrite,
     InvoiceCreateRequest,
+    InvoiceListResponse,
     InvoiceResponse,
     LastVoucherResponse,
     ProfileValidationResponse,
     RotationResponse,
+    SalesPointDiscoveryRequest,
+    SalesPointListResponse,
 )
 from app.arca.crypto import CredentialConfigurationError
 from app.arca.service import ArcaDomainError, FiscalProfileService, InvoiceService
@@ -131,6 +134,33 @@ def rotate_keyring(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail={"code": "credential_keyring_unavailable", "message": str(exc)},
         ) from exc
+
+
+@router.post("/sales-points", response_model=SalesPointListResponse)
+def discover_sales_points(
+    tenant_id: UUID,
+    payload: SalesPointDiscoveryRequest,
+    _: InternalRequestContext = Depends(_authorized_context),
+    db: Session = Depends(get_db),
+):
+    try:
+        return FiscalProfileService(db).discover_sales_points(tenant_id, payload)
+    except ArcaDomainError as exc:
+        _raise_domain(exc)
+
+
+@router.get("/invoices", response_model=InvoiceListResponse)
+def list_invoices(
+    tenant_id: UUID,
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(default=20, ge=1, le=100),
+    _: InternalRequestContext = Depends(_authorized_context),
+    db: Session = Depends(get_db),
+):
+    try:
+        return InvoiceService(db).list_invoices(tenant_id, offset=offset, limit=limit)
+    except ArcaDomainError as exc:
+        _raise_domain(exc)
 
 
 @router.post("/invoices/{environment}", response_model=InvoiceResponse, status_code=status.HTTP_202_ACCEPTED)

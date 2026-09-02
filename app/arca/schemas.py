@@ -23,6 +23,25 @@ class FiscalProfileWrite(BaseModel):
     default_vat_id: int = Field(default=5, gt=0)
 
 
+class SalesPointDiscoveryRequest(BaseModel):
+    arca_environment: ArcaEnvironment
+    arca_cuit: str = Field(pattern=r"^\d{11}$")
+    certificate: str = Field(min_length=1)
+    private_key: str = Field(min_length=1)
+    access_token: str = Field(min_length=1)
+
+
+class SalesPointResponse(BaseModel):
+    number: int
+    emission_type: str
+    blocked: bool
+    deactivation_date: date | None
+
+
+class SalesPointListResponse(BaseModel):
+    results: list[SalesPointResponse]
+
+
 class FiscalProfileResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -123,6 +142,11 @@ class InvoiceResponse(BaseModel):
     error: InvoiceError | None
     created_at: datetime
     updated_at: datetime
+
+
+class InvoiceListResponse(BaseModel):
+    count: int
+    results: list[InvoiceResponse]
 
 
 class LastVoucherResponse(BaseModel):

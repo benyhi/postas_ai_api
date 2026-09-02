@@ -25,7 +25,12 @@ from app.arca.crypto import (
     validate_credential_material,
 )
 from app.arca.models import ArcaFiscalProfile, ArcaInvoice
-from app.arca.schemas import FiscalProfileResponse, FiscalProfileWrite, InvoiceCreateRequest
+from app.arca.schemas import (
+    FiscalProfileResponse,
+    FiscalProfileWrite,
+    InvoiceCreateRequest,
+    SalesPointDiscoveryRequest,
+)
 from app.arca.service import ArcaDomainError, FiscalProfileService, InvoiceService
 from app.arca.worker import main as worker_main
 from app.billing.models import Plan, TenantSubscription
@@ -75,6 +80,18 @@ class FakeBilling:
 
     def getLastVoucher(self, point_of_sale, voucher_type):
         return self.last
+
+    def getSalesPoints(self):
+        return {
+            "ResultGet": {
+                "PtoVenta": [
+                    {"Nro": 2, "EmisionTipo": "CAE", "Bloqueado": "N", "FchBaja": None},
+                    {"Nro": 3, "EmisionTipo": "CAE", "Bloqueado": "S", "FchBaja": None},
+                    {"Nro": 4, "EmisionTipo": "CAE", "Bloqueado": "N", "FchBaja": "20260831"},
+                    {"Nro": 1, "EmisionTipo": "CAE", "Bloqueado": "N", "FchBaja": None},
+                ]
+            }
+        }
 
     def createVoucher(self, payload, return_response=False):
         self.create_calls += 1
@@ -581,6 +598,51 @@ def test_receiver_identification_completes_same_sale_and_invoice_explicitly(db, 
     ]
 
 
+def test_receiver_completion_preserves_legacy_immutable_payload(db, monkeypatch):
+    monkeypatch.setenv("ARCA_CONSUMER_FINAL_IDENTIFICATION_THRESHOLD", "100")
+    get_settings.cache_clear()
+    tenant_id = uuid4()
+    sale_id = uuid4()
+    subscribe(db, tenant_id)
+    _, _, profile_service = valid_profile(db, tenant_id)
+    service = InvoiceService(db, profile_service=profile_service)
+    original = InvoiceCreateRequest.model_validate(
+        {
+            "external_id": "legacy-manual-reference",
+            "sale_id": str(sale_id),
+            "invoice_date": "2025-01-02",
+            "items": [
+                {"description": "Legacy description", "quantity": "1", "final_unit_price": "121.00"}
+            ],
+        }
+    )
+    pending = service.enqueue(tenant_id, "development", original)
+    derived_retry = InvoiceCreateRequest.model_validate(
+        {
+            "external_id": "legacy-manual-reference",
+            "sale_id": str(sale_id),
+            "invoice_date": "2026-09-01",
+            "receiver": {"doc_type": 80, "doc_number": "20333333334", "iva_condition_id": 5},
+            "items": [
+                {"description": "Current product name", "quantity": "2", "final_unit_price": "60.50"}
+            ],
+        }
+    )
+
+    resumed = service.enqueue(
+        tenant_id,
+        "development",
+        derived_retry,
+        voucher_number=11,
+    )
+    record = db.get(ArcaInvoice, pending.id)
+
+    assert resumed.id == pending.id
+    assert record.request_payload["invoice_date"] == "2025-01-02"
+    assert record.request_payload["items"][0]["description"] == "Legacy description"
+    assert record.request_payload["receiver"]["doc_number"] == "20333333334"
+
+
 def test_automatic_sales_require_products_concept_and_services_require_dates(db):
     tenant_id = uuid4()
     subscribe(db, tenant_id)
@@ -609,3 +671,163 @@ def test_cross_tenant_lookup_is_not_allowed(db):
     with pytest.raises(ArcaDomainError) as captured:
         service.get_by_external_id(tenant_b, "private")
     assert captured.value.status_code == 404
+
+
+def test_sales_point_discovery_filters_disabled_points_without_persisting_secrets(db):
+    tenant_id = uuid4()
+    subscribe(db, tenant_id)
+    cert, key = credential_material()
+    service = FiscalProfileService(db, client_factory=lambda _options: FakeClient())
+
+    result = service.discover_sales_points(
+        tenant_id,
+        SalesPointDiscoveryRequest(
+            arca_environment="development",
+            arca_cuit=CUIT,
+            certificate=cert,
+            private_key=key,
+            access_token="temporary-access-token",
+        ),
+    )
+
+    assert [point.number for point in result.results] == [1, 2]
+    assert all(point.blocked is False and point.deactivation_date is None for point in result.results)
+    assert db.scalars(select(ArcaFiscalProfile)).all() == []
+
+
+def test_sales_point_discovery_requires_entitlement_before_credentials_or_network(db):
+    tenant_id = uuid4()
+    client_options = []
+    service = FiscalProfileService(
+        db,
+        client_factory=lambda options: client_options.append(options),
+    )
+
+    with pytest.raises(ArcaDomainError) as captured:
+        service.discover_sales_points(
+            tenant_id,
+            SalesPointDiscoveryRequest(
+                arca_environment="development",
+                arca_cuit=CUIT,
+                certificate="not-a-certificate",
+                private_key="not-a-private-key",
+                access_token="temporary-access-token",
+            ),
+        )
+
+    assert captured.value.status_code == 403
+    assert client_options == []
+    assert db.scalars(select(ArcaFiscalProfile)).all() == []
+
+
+def test_sales_point_discovery_maps_timeout_without_exposing_token(db):
+    tenant_id = uuid4()
+    subscribe(db, tenant_id)
+    cert, key = credential_material()
+
+    class TimeoutSalesPoints(FakeBilling):
+        def getSalesPoints(self):
+            raise socket.timeout("access_token=temporary-access-token")
+
+    service = FiscalProfileService(
+        db,
+        client_factory=lambda _options: FakeClient(TimeoutSalesPoints()),
+    )
+    with pytest.raises(ArcaDomainError) as captured:
+        service.discover_sales_points(
+            tenant_id,
+            SalesPointDiscoveryRequest(
+                arca_environment="development",
+                arca_cuit=CUIT,
+                certificate=cert,
+                private_key=key,
+                access_token="temporary-access-token",
+            ),
+        )
+
+    assert captured.value.code == "arca_timeout"
+    assert captured.value.status_code == 504
+    assert "temporary-access-token" not in captured.value.message
+
+
+def test_invoice_list_is_tenant_scoped_ordered_and_paginated(db):
+    tenant_a = uuid4()
+    tenant_b = uuid4()
+    subscribe(db, tenant_a)
+    subscribe(db, tenant_b)
+    _, _, profiles_a = valid_profile(db, tenant_a)
+    _, _, profiles_b = valid_profile(db, tenant_b)
+    service_a = InvoiceService(db, profile_service=profiles_a)
+    service_b = InvoiceService(db, profile_service=profiles_b)
+    first = service_a.enqueue(tenant_a, "development", invoice_payload("a-first"))
+    second = service_a.enqueue(tenant_a, "development", invoice_payload("a-second"))
+    service_b.enqueue(tenant_b, "development", invoice_payload("b-private"))
+
+    page = service_a.list_invoices(tenant_a, offset=0, limit=1)
+    remaining = service_a.list_invoices(tenant_a, offset=1, limit=10)
+
+    assert page.count == 2
+    assert [item.id for item in page.results] == [second.id]
+    assert [item.id for item in remaining.results] == [first.id]
+
+
+def test_sale_id_is_unique_and_sale_invoices_require_products_concept(db):
+    tenant_id = uuid4()
+    subscribe(db, tenant_id)
+    profile, _, profiles = valid_profile(db, tenant_id)
+    service = InvoiceService(db, profile_service=profiles)
+    sale_id = uuid4()
+    first_payload = InvoiceCreateRequest.model_validate(
+        {**invoice_payload("sale-first").model_dump(mode="json"), "sale_id": str(sale_id)}
+    )
+    service.enqueue(tenant_id, "development", first_payload)
+    duplicate_payload = InvoiceCreateRequest.model_validate(
+        {**invoice_payload("sale-second").model_dump(mode="json"), "sale_id": str(sale_id)}
+    )
+
+    with pytest.raises(ArcaDomainError) as duplicate:
+        service.enqueue(tenant_id, "development", duplicate_payload)
+    assert duplicate.value.code == "sale_already_invoiced"
+
+    profile.concept = 2
+    db.commit()
+    other_sale_payload = InvoiceCreateRequest.model_validate(
+        {
+            **invoice_payload("service-sale").model_dump(mode="json"),
+            "sale_id": str(uuid4()),
+            "service_start_date": "2026-09-01",
+            "service_end_date": "2026-09-01",
+            "payment_due_date": "2026-09-01",
+        }
+    )
+    with pytest.raises(ArcaDomainError) as incompatible:
+        service.enqueue(tenant_id, "development", other_sale_payload)
+    assert incompatible.value.code == "automatic_invoicing_requires_products_concept"
+
+
+def test_same_sale_id_is_independent_between_tenants(db):
+    tenant_a = uuid4()
+    tenant_b = uuid4()
+    sale_id = uuid4()
+    subscribe(db, tenant_a)
+    subscribe(db, tenant_b)
+    _, _, profiles_a = valid_profile(db, tenant_a)
+    _, _, profiles_b = valid_profile(db, tenant_b)
+    payload_a = InvoiceCreateRequest.model_validate(
+        {**invoice_payload("tenant-a-sale").model_dump(mode="json"), "sale_id": str(sale_id)}
+    )
+    payload_b = InvoiceCreateRequest.model_validate(
+        {**invoice_payload("tenant-b-sale").model_dump(mode="json"), "sale_id": str(sale_id)}
+    )
+
+    invoice_a = InvoiceService(db, profile_service=profiles_a).enqueue(
+        tenant_a, "development", payload_a
+    )
+    invoice_b = InvoiceService(db, profile_service=profiles_b).enqueue(
+        tenant_b, "development", payload_b
+    )
+
+    assert invoice_a.sale_id == sale_id
+    assert invoice_b.sale_id == sale_id
+    assert invoice_a.tenant_id == tenant_a
+    assert invoice_b.tenant_id == tenant_b
